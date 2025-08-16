@@ -9,7 +9,7 @@ IETF ベースのネットワークモデルの JSON Schema とサンプルデ�
 
 - **schema.json**  
   IETF Draft 2020-12 に準拠した JSON Schema。  
-  RFC 系 IETF モデル（例: RFC 8345, RFC 8346, RFC 8347 など）を元に、Operational 属性（`operational:*`）を拡張しています。
+  RFC 系 IETF モデル（例: RFC 8345, RFC 8346, RFC 8944 など）を元に、Operational 属性（`operational:*`）を拡張しています。
 
 - **sample.yaml**  
   上記スキーマに準拠したサンプルインスタンス。  
@@ -31,7 +31,7 @@ IETF ベースのネットワークモデルの JSON Schema とサンプルデ�
 
 - [RFC 8345: A YANG Data Model for Network Topologies](https://www.rfc-editor.org/rfc/rfc8345)
 - [RFC 8346: A YANG Data Model for Layer 3 Topologies](https://www.rfc-editor.org/rfc/rfc8346)
-- [RFC 8347: A YANG Data Model for Layer 2 Topologies](https://www.rfc-editor.org/rfc/rfc8347)
+- [RFC 8944: A YANG Data Model for Layer 2 Network Topologies Topologies](https://www.rfc-editor.org/rfc/rfc8944)
 
 ---
 

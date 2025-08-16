@@ -9,7 +9,7 @@ Operational attributes from the Configuration Management Database (CMDB) are als
 
 - **schema.json**  
   JSON Schema compliant with Draft 2020-12.  
-  Based on IETF RFC models (e.g., RFC 8345, RFC 8346, RFC 8347) and extended with operational attributes (`operational:*`).
+  Based on IETF RFC models (e.g., RFC 8345, RFC 8346, RFC 8944) and extended with operational attributes (`operational:*`).
 
 - **sample.yaml**  
   A sample instance conforming to the schema.  
@@ -31,7 +31,7 @@ Operational attributes from the Configuration Management Database (CMDB) are als
 
 - [RFC 8345: A YANG Data Model for Network Topologies](https://www.rfc-editor.org/rfc/rfc8345)
 - [RFC 8346: A YANG Data Model for Layer 3 Topologies](https://www.rfc-editor.org/rfc/rfc8346)
-- [RFC 8347: A YANG Data Model for Layer 2 Topologies](https://www.rfc-editor.org/rfc/rfc8347)
+- [RFC 8944: A YANG Data Model for Layer 2 Network Topologies Topologies](https://www.rfc-editor.org/rfc/rfc8944)
 
 ---
 
