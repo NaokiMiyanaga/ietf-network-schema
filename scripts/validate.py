@@ -47,13 +47,9 @@ def normalize_refs(obj: Any):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--schema", type=Path, required=False)
-    ap.add_argument("--data", type=Path, required=False)
-    \1
-if not args.schema:
-    args.schema = Path(__file__).resolve().parent / "schema" / "schema.json"
-if not args.data:
-    args.data = Path(__file__).resolve().parent / "data" / "sample.yaml"
+    ap.add_argument("--schema", type=Path, required=True)
+    ap.add_argument("--data", type=Path, required=True)
+    args = ap.parse_args()
 
     schema = load_json(args.schema)
     instance = load_yaml(args.data)
