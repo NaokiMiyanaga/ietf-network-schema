@@ -22,7 +22,7 @@ Operational attributes from the Configuration Management Database (CMDB) are als
 - **test_validate.py**  
   Smoke test using pytest to ensure the sample YAML conforms to the schema.
 
-- **README.ja.md / README.en.md**  
+- **README.ja.md / README.md**  
   Documentation in Japanese and English.
 
 ---
