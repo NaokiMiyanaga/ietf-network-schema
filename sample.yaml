@@ -1,0 +1,61 @@
+ietf-network:networks:
+  network:
+  - network-id: nw1
+    node:
+    - node-id: L3SW1
+      ietf-network-topology:termination-point:
+      - tp-id: ae1
+        operational:tp-state:
+          admin-status: up
+          oper-status: up
+          speed-bps: 20000000000
+          duplex: full
+          mtu: 1500
+          last-change: '2025-08-16T02:10:31Z'
+      - tp-id: vlan100
+        operational:tp-state:
+          admin-status: up
+          oper-status: up
+          mtu: 1500
+          last-change: '2025-08-16T02:10:05Z'
+    - node-id: L2SW1
+      ietf-network-topology:termination-point:
+      - tp-id: ae1
+        ietf-l2-topology:l2-termination-point-attributes:
+          lag: true
+          member-link-tp:
+          - ge-0/0/1
+          - ge-0/0/2
+          operational:lag-state:
+            aggregate-oper-status: up
+            lacp:
+              actor-state: collecting-distributing
+              partner-state: collecting-distributing
+        operational:tp-state:
+          admin-status: up
+          oper-status: up
+          speed-bps: 20000000000
+          last-change: '2025-08-16T02:10:29Z'
+    - node-id: L3SW2
+      ietf-network-topology:termination-point:
+      - tp-id: ae1
+        operational:tp-state:
+          admin-status: up
+          oper-status: up
+          speed-bps: 20000000000
+          duplex: full
+          mtu: 1500
+          last-change: '2025-08-16T02:10:33Z'
+    ietf-network-topology:link:
+    - link-id: L3SW1-ae1__L2SW1-ae1-vlan100
+      operational:link-state:
+        oper-status: up
+        bandwidth: 16000000000
+        delay-ms: 0.12
+        last-change: '2025-08-16T02:10:32Z'
+      ietf-network-topology:source:
+        source-node: L3SW1
+        source-tp: ae1
+      ietf-network-topology:destination:
+        dest-node: L2SW1
+        dest-tp: ae1
