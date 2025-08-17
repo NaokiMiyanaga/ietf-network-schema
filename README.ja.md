@@ -1,3 +1,5 @@
+**ライセンス:** MIT
+
 # README.ja.md
 
 ## 概要
@@ -89,26 +91,23 @@ sqlite3 rag.db "SELECT rowid,type,node_id,tp_id,substr(text,1,60) FROM docs LIMI
 python3 scripts/rag_retriever.py --db rag.db --q "mtu 1500" --filters type=tp node_id=L3SW1 --k 3
 ```
 
-### ④ QA (OpenAI API と連携)
-```bash
-# Dry Run (APIキーなし): プロンプトを表示するだけ、課金なし
-python3 scripts/rag_qa.py --db rag.db --q "L3SW1:ae1 の状態は？" --filters type=tp node_id=L3SW1 --k 3 --dry-run
 
-# OpenAI APIキーを設定した場合: 実際に回答を生成（OpenAI API を実行するため課金が必要）
-export OPENAI_API_KEY=sk-xxxx
-python3 scripts/rag_qa.py --db rag.db --q "L3SW1:ae1 の状態は？" --filters type=tp node_id=L3SW1 --k 3
+### ④ QA（OpenAI API 連携）
+
+```bash
+python3 scripts/rag_qa.py --db rag.db --q "What is the state of L3SW1:ae1?" --filters type=tp node_id=L3SW1 --k 3
 ```
 
----
+出力例:
 
-## 注意事項
-- **Dry Run**: API キー未設定時、プロンプトのみ出力（課金なし）。  
-- **API キー設定時**: OpenAI API を実行するため **課金が必要**。  
+```
+L3SW1:ae1の状態は、管理状態（admin）が「up」、運用状態（oper）が「up」です。MTUは1500、デュプレックスはフルです。[1]
+```
 
----
+※ 現状はプロンプトで **日本語で回答** と指定しているため、質問が英語でも日本語で返答されます。今後、**質問言語に合わせて回答言語も自動で切り替える**ように更新予定です。
+
 
 ## ライセンス
 
-このプロジェクトは **MIT ライセンス** のもとで提供されています。  
-詳細は [LICENSE](./LICENSE) を参照してください。
+このプロジェクトは **MIT ライセンス** の下で配布されています。詳細は [LICENSE](LICENSE) をご覧ください。
 
