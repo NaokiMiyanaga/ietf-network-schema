@@ -104,3 +104,11 @@ python3 scripts/rag_qa.py --db rag.db --q "L3SW1:ae1 の状態は？" --filters 
 ## 注意事項
 - **Dry Run**: API キー未設定時、プロンプトのみ出力（課金なし）。  
 - **API キー設定時**: OpenAI API を実行するため **課金が必要**。  
+
+---
+
+## ライセンス
+
+このプロジェクトは **MIT ライセンス** のもとで提供されています。  
+詳細は [LICENSE](./LICENSE) を参照してください。
+

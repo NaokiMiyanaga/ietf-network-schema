@@ -104,3 +104,11 @@ python3 scripts/rag_qa.py --db rag.db --q "What is the state of L3SW1:ae1?" --fi
 ## Notes
 - **Dry Run**: No API key → prints prompt only, no cost.  
 - **With API key**: OpenAI API execution **requires payment**.  
+
+---
+
+## License
+
+This project is licensed under the **MIT License**.  
+See the [LICENSE](./LICENSE) file for details.
+
