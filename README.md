@@ -45,6 +45,8 @@ Operational attributes (`operational:*`) are integrated from CMDB, enabling the 
 - **scripts/show_links.py**  
   Show interface-to-interface connections; filter by node or specific interface.
 
+- **scripts/qa_repl.py**  
+  Interactive QA REPL (retrieval + optional OpenAI answer). Use `--dry-run` to inspect prompts; with API key it generates answers.
 - **scripts/rag_qa.py**  
   Run QA with OpenAI API using retrieved context.  
   Without API key → **Dry Run** (prints prompt, no cost).  
@@ -195,6 +197,15 @@ python3 scripts/rag_qa.py --db rag.db --q "What is the state of L3SW1:ae1?" --fi
 # With OpenAI API key: generates answer (requires payment)
 export OPENAI_API_KEY=sk-xxxx
 python3 scripts/rag_qa.py --db rag.db --q "What is the state of L3SW1:ae1?" --filters type=tp node_id=L3SW1 --k 3
+```
+
+Interactive (RAG QA REPL):
+```bash
+python3 scripts/qa_repl.py --db rag.db --k 5 --dry-run           # free (prompt only)
+export OPENAI_API_KEY=sk-xxxx
+python3 scripts/qa_repl.py --db rag.db --k 5                     # paid (answer generation)
+# Per-turn filters: append "| filters key=value ..."
+# Example: "L3SW1:ae1 の状態は？ | filters type=tp node_id=L3SW1"
 ```
 
 ---

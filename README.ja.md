@@ -52,6 +52,9 @@
 - **scripts/show_links.py**  
   インターフェース↔インターフェースの接続関係を一覧表示（ノード/IFでの絞り込み対応）。
 
+- **scripts/qa_repl.py**  
+  取得（R）＋生成（G）を対話的に実行する QA 用 REPL。`--dry-run` でプロンプト確認、APIキー設定時は回答生成。
+
 - **README.md / README.ja.md**  
   英語版・日本語版のドキュメント。
 
@@ -146,6 +149,15 @@ python3 scripts/show_links.py --db rag.db --tp L3SW1:ae1       # 特定IFの対�
 
 ```bash
 python3 scripts/rag_qa.py --db rag.db --q "What is the state of L3SW1:ae1?" --filters type=tp node_id=L3SW1 --k 3
+```
+
+対話型（RAG QA REPL）:
+```bash
+python3 scripts/qa_repl.py --db rag.db --k 5 --dry-run     # 無料（プロンプトのみ）
+export OPENAI_API_KEY=sk-xxxx
+python3 scripts/qa_repl.py --db rag.db --k 5               # 有償（回答生成）
+# 1行でフィルタ指定も可能:  質問文 | filters key=value ...
+# 例: "L3SW1:ae1 の状態は？ | filters type=tp node_id=L3SW1"
 ```
 
 出力例:
