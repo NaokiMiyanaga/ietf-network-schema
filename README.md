@@ -186,6 +186,8 @@ ietf-network:networks:
 Tip: after editing YAML, regenerate DB with `python3 scripts/loadJSONL.py --db rag.db --jsonl outputs/objects.jsonl --reset`.
 
 ### ④ QA with OpenAI API
+
+**Important:** Without `OPENAI_API_KEY` = Dry Run (free). With API key = live answer (paid).
 ```bash
 # Dry Run (no API key): shows prompt only, no cost
 python3 scripts/rag_qa.py --db rag.db --q "What is the state of L3SW1:ae1?" --filters type=tp node_id=L3SW1 --k 3 --dry-run

@@ -142,6 +142,8 @@ python3 scripts/show_links.py --db rag.db --tp L3SW1:ae1       # 特定IFの対�
 
 ### ④ QA（OpenAI API 連携）
 
+**重要:** API キー未設定＝ドライラン（無料）。API キー設定＝回答生成（有償／課金発生）。
+
 ```bash
 python3 scripts/rag_qa.py --db rag.db --q "What is the state of L3SW1:ae1?" --filters type=tp node_id=L3SW1 --k 3
 ```
