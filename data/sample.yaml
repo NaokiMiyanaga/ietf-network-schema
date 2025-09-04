@@ -12,12 +12,40 @@ ietf-network:networks:
           duplex: full
           mtu: 1500
           last-change: '2025-08-16T02:10:31Z'
+      - tp-id: ae2
+        operational:tp-state:
+          admin-status: up
+          oper-status: up
+          speed-bps: 20000000000
+          duplex: full
+          mtu: 1500
+          last-change: '2025-08-16T02:12:00Z'
+        ietf-l3-unicast-topology:l3-termination-point-attributes:
+          ip-address: 192.0.2.2
+          prefix-length: 30
       - tp-id: vlan100
         operational:tp-state:
           admin-status: up
           oper-status: up
           mtu: 1500
           last-change: '2025-08-16T02:10:05Z'
+        ietf-l3-unicast-topology:l3-termination-point-attributes:
+          ip-address: 10.100.0.1
+          prefix-length: 24
+      operational:routing:
+        routes:
+        - vrf: default
+          prefix: 0.0.0.0/0
+          next-hop: 192.0.2.1
+          protocol: static
+          metric: 1
+          last-change: '2025-08-16T02:20:00Z'
+        - vrf: default
+          prefix: 10.0.0.0/24
+          next-hop: 192.0.2.2
+          protocol: ospf
+          metric: 10
+          last-change: '2025-08-16T02:21:00Z'
     - node-id: L2SW1
       ietf-network-topology:termination-point:
       - tp-id: ae1
@@ -39,6 +67,8 @@ ietf-network:networks:
     - node-id: L3SW2
       ietf-network-topology:termination-point:
       - tp-id: ae1
+        ietf-l2-topology:l2-termination-point-attributes:
+          vlan-id: 101
         operational:tp-state:
           admin-status: up
           oper-status: up
@@ -46,6 +76,50 @@ ietf-network:networks:
           duplex: full
           mtu: 1500
           last-change: '2025-08-16T02:10:33Z'
+      - tp-id: ae2
+        operational:tp-state:
+          admin-status: up
+          oper-status: up
+          speed-bps: 20000000000
+          duplex: full
+          mtu: 1500
+          last-change: '2025-08-16T02:12:05Z'
+        ietf-l3-unicast-topology:l3-termination-point-attributes:
+          ip-address: 192.0.2.1
+          prefix-length: 30
+      - tp-id: vlan100
+        operational:tp-state:
+          admin-status: up
+          oper-status: up
+          mtu: 1500
+          last-change: '2025-08-16T02:10:07Z'
+        ietf-l3-unicast-topology:l3-termination-point-attributes:
+          ip-address: 10.100.0.2
+          prefix-length: 24
+      operational:routing:
+        routes:
+        - vrf: default
+          prefix: 10.0.0.0/24
+          next-hop: 198.51.100.1
+          protocol: static
+          metric: 1
+          last-change: '2025-08-16T02:22:00Z'
+        - vrf: default
+          prefix: 0.0.0.0/0
+          next-hop: 198.51.100.254
+          protocol: bgp
+          metric: 20
+          last-change: '2025-08-16T02:23:00Z'
+    - node-id: L2SW2
+      ietf-network-topology:termination-point:
+      - tp-id: ae1
+        ietf-l2-topology:l2-termination-point-attributes:
+          vlan-id: 101
+        operational:tp-state:
+          admin-status: up
+          oper-status: up
+          speed-bps: 20000000000
+          last-change: '2025-08-16T02:10:35Z'
     ietf-network-topology:link:
     - link-id: L3SW1-ae1__L2SW1-ae1-vlan100
       operational:link-state:
@@ -59,3 +133,29 @@ ietf-network:networks:
       ietf-network-topology:destination:
         dest-node: L2SW1
         dest-tp: ae1
+    - link-id: L3SW2-ae1__L2SW2-ae1
+      operational:link-state:
+        oper-status: up
+        bandwidth: 16000000000
+        delay-ms: 0.20
+        last-change: '2025-08-16T02:10:36Z'
+      ietf-l2-topology:l2-link-attributes:
+        vlan-id: 101
+      ietf-network-topology:source:
+        source-node: L3SW2
+        source-tp: ae1
+      ietf-network-topology:destination:
+        dest-node: L2SW2
+        dest-tp: ae1
+    - link-id: L3SW1-ae2__L3SW2-ae2
+      operational:link-state:
+        oper-status: up
+        bandwidth: 20000000000
+        delay-ms: 0.50
+        last-change: '2025-08-16T02:12:10Z'
+      ietf-network-topology:source:
+        source-node: L3SW1
+        source-tp: ae2
+      ietf-network-topology:destination:
+        dest-node: L3SW2
+        dest-tp: ae2

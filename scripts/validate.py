@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from jsonschema import Draft202012Validator, RefResolver
+from jsonschema import Draft202012Validator, RefResolver, FormatChecker
 
 def load_json(path: Path):
     with path.open("r", encoding="utf-8") as f:
@@ -67,7 +67,8 @@ def main():
         schema.setdefault("$id", base_uri)
 
     resolver = RefResolver(base_uri=base_uri, referrer=schema, store=store)
-    validator = Draft202012Validator(schema, resolver=resolver)
+    # Use FormatChecker so ipv4/ipv6 formats are enforced, making oneOf(ipv4, ipv6) disjoint
+    validator = Draft202012Validator(schema, resolver=resolver, format_checker=FormatChecker())
 
     errors = sorted(validator.iter_errors(instance), key=lambda e: e.path)
     if errors:

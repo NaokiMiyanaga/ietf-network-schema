@@ -55,6 +55,20 @@ def make_text_for_link(link):
     if op.get("delay-ms") is not None: fields.append(f"delay-ms={op['delay-ms']}")
     return f"Link {lid}" + (f" ({', '.join(fields)})" if fields else "")
 
+def make_text_for_route(node_id: str, r: dict) -> str:
+    vrf = r.get("vrf") or "default"
+    prefix = r.get("prefix") or "?"
+    nh = r.get("next-hop") or "?"
+    proto = r.get("protocol")
+    metric = r.get("metric")
+    parts = [f"vrf={vrf}", prefix, f"-> {nh}"]
+    tail = []
+    if proto: tail.append(str(proto))
+    if metric is not None: tail.append(f"metric={metric}")
+    if tail:
+        parts.append(f"({', '.join(tail)})")
+    return "Route " + node_id + ": " + " ".join(parts)
+
 def to_doc(doc_type, **fields):
     doc = {"type": doc_type, **fields}
     # common metadata
@@ -88,6 +102,22 @@ def extract_docs(data: dict):
                     tp=tp,
                     operational={"tp-state": op} if op else None,
                     text=make_text_for_tp(node_id, tp),
+                    observed_at=observed,
+                ))
+            # routes (optional, custom operational:routing.routes)
+            routing = (node.get("operational:routing") or {}).get("routes") or []
+            for r in routing:
+                observed = r.get("last-change")
+                docs.append(to_doc(
+                    "route",
+                    **{"network-id": network_id, "node-id": node_id},
+                    route=r,
+                    vrf=r.get("vrf") or "default",
+                    prefix=r.get("prefix"),
+                    next_hop=r.get("next-hop"),
+                    protocol=r.get("protocol"),
+                    metric=r.get("metric"),
+                    text=make_text_for_route(node_id, r),
                     observed_at=observed,
                 ))
         # links

@@ -21,7 +21,7 @@ Operational attributes (`operational:*`) are integrated from CMDB, enabling the 
   Validate YAML instances against JSON Schema Draft 2020-12.  
   Uses `RefResolver` for `$ref` resolution.
 
-- **tests/test_validate.py**  
+- **scripts/test_validate.py**  
   Smoke test with pytest.  
   Ensures the sample YAML conforms to the schema.
 
@@ -35,6 +35,15 @@ Operational attributes (`operational:*`) are integrated from CMDB, enabling the 
 
 - **scripts/rag_retriever.py**  
   Search using SQLite FTS5 (with filters).
+
+- **scripts/jp_query.py**  
+  Heuristic Japanese NL → FTS query + filters (offline). Useful to try natural language retrieval without calling any API.
+
+- **scripts/jp_repl.py**  
+  Interactive Japanese REPL for retrieval, listing, connections, and optional QA.
+
+- **scripts/show_links.py**  
+  Show interface-to-interface connections; filter by node or specific interface.
 
 - **scripts/rag_qa.py**  
   Run QA with OpenAI API using retrieved context.  
@@ -89,6 +98,93 @@ sqlite3 rag.db "SELECT rowid,type,node_id,tp_id,substr(text,1,60) FROM docs LIMI
 python3 scripts/rag_retriever.py --db rag.db --q "mtu 1500" --filters type=tp node_id=L3SW1 --k 3
 ```
 
+Japanese NL (heuristic, offline):
+```bash
+python3 scripts/jp_query.py --db rag.db --q "L3SW1:ae1 の状態は？" --k 3 --debug
+```
+
+Common natural-language prompts (examples):
+- Addresses: "アドレスは？", "L3SW1 のアドレス"
+- SVI/VLAN: "SVI一覧", "L3SW* のSVI一覧", "VLAN100 のIF一覧"
+- Connections: "どんな接続？", "L3SW1 の接続", "L3SW1:ae1 の接続先"
+- Routes: "ルート一覧", "L3SW1 のルート一覧", "ルーティングは？"
+- Summary: "どんなネットワーク？" (counts + adjacency)
+
+Interactive REPL (Japanese):
+```bash
+python3 scripts/jp_repl.py --db rag.db --k 5                # summary view
+python3 scripts/jp_repl.py --db rag.db --k 5 --mode context # show context
+python3 scripts/jp_repl.py --db rag.db --k 5 --mode json    # JSON output
+# Debug filters/MATCH query:
+python3 scripts/jp_repl.py --db rag.db --k 5 --debug
+# QA end-to-end (requires OPENAI_API_KEY). Use --dry-run to just print prompt.
+python3 scripts/jp_repl.py --db rag.db --k 3 --qa --dry-run
+python3 scripts/jp_repl.py --db rag.db --k 3 --qa
+```
+
+Connections (interface ↔ interface):
+```bash
+python3 scripts/show_links.py --db rag.db                      # all links
+python3 scripts/show_links.py --db rag.db --node L3SW1         # links involving a node
+python3 scripts/show_links.py --db rag.db --tp L3SW1:ae1       # peer of specific interface
+```
+
+Sample network (excerpt):
+```yaml
+ietf-network:networks:
+  network:
+  - network-id: nw1
+    node:
+    - node-id: L3SW1
+      ietf-network-topology:termination-point:
+      - tp-id: ae2
+        ietf-l3-unicast-topology:l3-termination-point-attributes:
+          ip-address: 192.0.2.2
+          prefix-length: 30
+      - tp-id: vlan100
+        ietf-l3-unicast-topology:l3-termination-point-attributes:
+          ip-address: 10.100.0.1
+          prefix-length: 24
+      operational:routing:
+        routes:
+        - vrf: default
+          prefix: 0.0.0.0/0
+          next-hop: 192.0.2.1
+          protocol: static
+    - node-id: L3SW2
+      ietf-network-topology:termination-point:
+      - tp-id: ae2
+        ietf-l3-unicast-topology:l3-termination-point-attributes:
+          ip-address: 192.0.2.1
+          prefix-length: 30
+      - tp-id: vlan100
+        ietf-l3-unicast-topology:l3-termination-point-attributes:
+          ip-address: 10.100.0.2
+          prefix-length: 24
+    - node-id: L2SW1
+      ietf-network-topology:termination-point:
+      - tp-id: ae1
+    - node-id: L2SW2
+      ietf-network-topology:termination-point:
+      - tp-id: ae1
+        ietf-l2-topology:l2-termination-point-attributes:
+          vlan-id: 101
+    ietf-network-topology:link:
+    - link-id: L3SW1-ae1__L2SW1-ae1-vlan100
+      ietf-network-topology:source:      { source-node: L3SW1, source-tp: ae1 }
+      ietf-network-topology:destination: { dest-node:   L2SW1, dest-tp:   ae1 }
+    - link-id: L3SW2-ae1__L2SW2-ae1
+      ietf-l2-topology:l2-link-attributes:
+        vlan-id: 101
+      ietf-network-topology:source:      { source-node: L3SW2, source-tp: ae1 }
+      ietf-network-topology:destination: { dest-node:   L2SW2, dest-tp:   ae1 }
+    - link-id: L3SW1-ae2__L3SW2-ae2
+      ietf-network-topology:source:      { source-node: L3SW1, source-tp: ae2 }
+      ietf-network-topology:destination: { dest-node:   L3SW2, dest-tp:   ae2 }
+```
+
+Tip: after editing YAML, regenerate DB with `python3 scripts/loadJSONL.py --db rag.db --jsonl outputs/objects.jsonl --reset`.
+
 ### ④ QA with OpenAI API
 ```bash
 # Dry Run (no API key): shows prompt only, no cost
@@ -111,4 +207,3 @@ python3 scripts/rag_qa.py --db rag.db --q "What is the state of L3SW1:ae1?" --fi
 
 This project is licensed under the **MIT License**.  
 See the [LICENSE](./LICENSE) file for details.
-

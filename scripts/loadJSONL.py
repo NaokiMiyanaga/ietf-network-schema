@@ -11,6 +11,7 @@ import json
 import sqlite3
 import pathlib
 import os
+import argparse
 from typing import Dict
 
 DB_PATH = "rag.db"
@@ -84,15 +85,20 @@ def load_jsonl(cur: sqlite3.Cursor, jsonl_path: pathlib.Path) -> int:
     return n
 
 def main():
-    db = DB_PATH
-    jsonl = pathlib.Path(JSONL_PATH)
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--db", default=DB_PATH, help="SQLite DB path (default: rag.db)")
+    ap.add_argument("--jsonl", default=JSONL_PATH, help="JSONL path (default: outputs/objects.jsonl)")
+    ap.add_argument("--reset", action="store_true", help="Remove existing DB before loading")
+    args = ap.parse_args()
+
+    db = str(args.db)
+    jsonl = pathlib.Path(args.jsonl)
 
     if not jsonl.exists():
         raise SystemExit(f"[ERROR] JSONL not found: {jsonl}")
 
-    # 既存 DB を使い回す場合は消さなくてもOK。クリーンにするなら下のコメントを外す
-    # if os.path.exists(db):
-    #     os.remove(db)
+    if args.reset and os.path.exists(db):
+        os.remove(db)
 
     conn = sqlite3.connect(db)
     cur = conn.cursor()
