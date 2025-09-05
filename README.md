@@ -65,6 +65,27 @@ Operational attributes (`operational:*`) are integrated from CMDB, enabling the 
 
 ---
 
+## Dependencies
+
+- Required (local search/listing/ETL)
+  - Python 3.10+ (recommended: 3.11+)
+  - Packages: `jsonschema>=4.18.0`, `pyyaml` (see `requirements.txt`)
+  - SQLite3 (stdlib)
+- Optional (for QA via OpenAI)
+  - `openai` (recommended 1.x)
+
+Install (recommended: virtualenv)
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -U pip
+python -m pip install -r requirements.txt      # required
+# For QA features only:
+python -m pip install openai
+```
+
+macOS (Homebrew Python) note: PEP 668 prevents global `pip install`. Use a virtualenv (above) or `pipx`.
+
 ## Usage
 
 ### ① Describe network topology in YAML

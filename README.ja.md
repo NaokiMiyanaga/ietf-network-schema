@@ -68,6 +68,27 @@
 
 ---
 
+## 依存関係（Dependencies）
+
+- 必須（ローカル検索・一覧・ETL）
+  - Python 3.10 以上（推奨: 3.11+）
+  - パッケージ: `jsonschema>=4.18.0`, `pyyaml`（`requirements.txt`）
+  - SQLite3（標準ライブラリ）
+- 任意（QA で OpenAI を使う場合のみ）
+  - `openai`（推奨: 1.x 系）
+
+インストール例（推奨: 仮想環境）
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -U pip
+python -m pip install -r requirements.txt          # 必須分
+# QA 機能を使う場合のみ:
+python -m pip install openai
+```
+
+macOS（Homebrew Python）の注意: PEP 668 によりグローバルへの `pip install` が制限されます。仮想環境（上記）か `pipx` を利用してください。
+
 ## Usage
 
 ### ① YAML でネットワークトポロジを記述
