@@ -16,8 +16,8 @@
   RFC モデル（例: RFC 8345, RFC 8346, RFC 8944）をベースにしつつ、`operational:*` 拡張を追加。
 
 - **data/sample.yaml**  
-  サンプルネットワーク構成。  
-  ノード・TP・リンクに加え、L2/L3 属性や運用状態を含む。
+  FRR を用いた検証環境のマスター YAML（意図／intended）を IETF モデルへマッピングしたサンプル。  
+  ノード・TP・リンク・L2/L3 属性を含みます。`operational:*` は省略可能で、欠落時は ETL が既定値を補完します。
 
 - **scripts/validate.py**  
   YAML インスタンスを JSON Schema Draft 2020-12 で検証。  
@@ -29,7 +29,7 @@
 
 - **scripts/etl.py**  
   YAML → JSONL に変換する ETL スクリプト。  
-  CMDB に取り込む前処理。
+  CMDB に取り込む前処理に加え、欠落した `operational:*` の既定値を補完します。
 
 - **scripts/loadJSONL.py**  
   JSONL を SQLite (FTS5 対応) にロード。  
@@ -90,6 +90,11 @@ python -m pip install openai
 macOS（Homebrew Python）の注意: PEP 668 によりグローバルへの `pip install` が制限されます。仮想環境（上記）か `pipx` を利用してください。
 
 ## Usage
+
+### 検証（バリデーション）
+```bash
+python3 scripts/validate.py --schema schema/schema.json --data data/sample.yaml
+```
 
 ### ① YAML でネットワークトポロジを記述
 ```yaml
@@ -188,6 +193,18 @@ L3SW1:ae1の状態は、管理状態（admin）が「up」、運用状態（oper
 ```
 
 ※ 現状はプロンプトで **日本語で回答** と指定しているため、質問が英語でも日本語で返答されます。今後、**質問言語に合わせて回答言語も自動で切り替える**ように更新予定です。
+
+---
+
+## Operational の既定値（欠落時の補完）
+
+- 範囲: 既定値の適用は ETL 実行時のみです（JSON Schema の検証では自動補完しません）。
+- 適用箇所と値:
+  - `operational:tp-state`: `admin-status=up`, `oper-status=unknown`, `speed-bps=0`, `duplex=unknown`, `mtu=1500`
+  - `operational:link-state`: `oper-status=unknown`, `bandwidth=0`
+  - `ietf-l2-topology:l2-termination-point-attributes.operational:lag-state`: `aggregate-oper-status=unknown`
+- 挙動: コンテナ自体が無い場合は作成して既定値を設定。既に値があるキーは上書きしません。
+- 目的: FRR 由来の「意図（intended）」YAML では実行時の状態が省略されがちなので、下流の検索・要約の安定性を保ちつつ「不明（unknown）」を明示します。
 
 ## サンプルネットワーク（抜粋）
 

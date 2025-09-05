@@ -30,6 +30,71 @@ def run_validate(schema: Path, data: Path, validate_py: Path):
 def iso_now():
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
+def setdefaults(d: dict, defaults: dict) -> dict:
+    """Set default values into dict d (shallow), without overwriting existing keys."""
+    if d is None:
+        d = {}
+    for k, v in defaults.items():
+        d.setdefault(k, v)
+    return d
+
+def apply_operational_defaults(doc: dict) -> dict:
+    """Apply default values for missing operational fields in-place and return doc.
+    Defaults are only applied where relevant containers exist or are obviously implied.
+    - tp: operational:tp-state
+    - link: operational:link-state
+    - l2 tp attrs: operational:lag-state
+    """
+    nets = (doc.get("ietf-network:networks") or {}).get("network", []) or []
+    for net in nets:
+        # nodes / tps
+        for node in (net.get("node") or []) or []:
+            for tp in (node.get("ietf-network-topology:termination-point") or []) or []:
+                # TP state defaults
+                op = tp.get("operational:tp-state")
+                if op is None:
+                    op = {}
+                    tp["operational:tp-state"] = op
+                setdefaults(
+                    op,
+                    {
+                        "admin-status": "up",
+                        "oper-status": "unknown",
+                        "speed-bps": 0,
+                        "duplex": "unknown",
+                        "mtu": 1500,
+                    },
+                )
+
+                # LAG state defaults (if L2 attrs exist)
+                l2 = tp.get("ietf-l2-topology:l2-termination-point-attributes")
+                if isinstance(l2, dict):
+                    lag = l2.get("operational:lag-state")
+                    if lag is None:
+                        lag = {}
+                        l2["operational:lag-state"] = lag
+                    setdefaults(
+                        lag,
+                        {
+                            "aggregate-oper-status": "unknown",
+                        },
+                    )
+
+        # links
+        for link in (net.get("ietf-network-topology:link") or []) or []:
+            lop = link.get("operational:link-state")
+            if lop is None:
+                lop = {}
+                link["operational:link-state"] = lop
+            setdefaults(
+                lop,
+                {
+                    "oper-status": "unknown",
+                    "bandwidth": 0,
+                },
+            )
+    return doc
+
 def make_text_for_node(n):
     nid = n.get("node-id")
     l3 = n.get("ietf-l3-unicast-topology:l3-node-attributes", {}) or {}
@@ -153,10 +218,13 @@ def main():
     with args.data.open("r", encoding="utf-8") as f:
         y = yaml.safe_load(f)
 
-    # 3) extract docs
+    # 3) apply defaults for missing operational fields (in-memory)
+    y = apply_operational_defaults(y or {})
+
+    # 4) extract docs
     docs = extract_docs(y)
 
-    # 4) write JSONL
+    # 5) write JSONL
     with args.out.open("w", encoding="utf-8") as f:
         for d in docs:
             trimmed = {k: v for k, v in d.items() if v is not None}

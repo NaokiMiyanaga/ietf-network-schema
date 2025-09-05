@@ -14,8 +14,8 @@ Operational attributes (`operational:*`) are integrated from CMDB, enabling the 
   Based on IETF RFC models (e.g., RFC 8345, RFC 8346, RFC 8944) with `operational:*` extensions.
 
 - **data/sample.yaml**  
-  A sample network instance.  
-  Includes nodes, TPs, links, L2/L3 attributes, and operational states.
+  Sample network mapped from an FRR-based lab's master YAML (intended).  
+  Contains nodes, TPs, links, and L2/L3 attributes. `operational:*` is optional and, if missing, defaults are applied by ETL.
 
 - **scripts/validate.py**  
   Validate YAML instances against JSON Schema Draft 2020-12.  
@@ -26,8 +26,8 @@ Operational attributes (`operational:*`) are integrated from CMDB, enabling the 
   Ensures the sample YAML conforms to the schema.
 
 - **scripts/etl.py**  
-  ETL script converting YAML → JSONL.  
-  Prepares objects for CMDB ingestion.
+  ETL script converting YAML → JSONL (for CMDB).  
+  Applies defaults for missing `operational:*` fields.
 
 - **scripts/loadJSONL.py**  
   Load JSONL into SQLite (FTS5 enabled).  
@@ -87,6 +87,11 @@ python -m pip install openai
 macOS (Homebrew Python) note: PEP 668 prevents global `pip install`. Use a virtualenv (above) or `pipx`.
 
 ## Usage
+
+### Validation
+```bash
+python3 scripts/validate.py --schema schema/schema.json --data data/sample.yaml
+```
 
 ### ① Describe network topology in YAML
 ```yaml
@@ -207,6 +212,18 @@ ietf-network:networks:
 ```
 
 Tip: after editing YAML, regenerate DB with `python3 scripts/loadJSONL.py --db rag.db --jsonl outputs/objects.jsonl --reset`.
+
+---
+
+## Operational Defaults
+
+- Scope: Defaults are applied during ETL only (JSON Schema validation does not auto-fill values).
+- Where applied:
+  - `operational:tp-state`: `admin-status=up`, `oper-status=unknown`, `speed-bps=0`, `duplex=unknown`, `mtu=1500`
+  - `operational:link-state`: `oper-status=unknown`, `bandwidth=0`
+  - `ietf-l2-topology:l2-termination-point-attributes.operational:lag-state`: `aggregate-oper-status=unknown`
+- Behavior: If a container is missing, ETL creates it with defaults; if present, ETL does not overwrite existing keys.
+- Rationale: FRR-derived intended YAML often omits runtime state. Defaults keep downstream queries stable while signaling unknowns.
 
 ### ④ QA with OpenAI API
 
