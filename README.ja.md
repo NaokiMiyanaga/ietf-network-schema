@@ -4,7 +4,7 @@
 
 ## 概要
 
-このリポジトリは **IETF ネットワークモデル**に基づいた JSON Schema、サンプル YAML データ、検証スクリプト、および RAG (Retrieval-Augmented Generation) 用の簡易 CMDB 環境を提供します。  
+このリポジトリは **IETF ネットワークモデル**に基づいた JSON Schema、サンプル YAML データ、検証スクリプト、およびCMDB 環境を提供します。  
 運用属性（`operational:*`）を CMDB から取り込み、IETF YANG モデルを JSON Schema として活用できるようになっています。  
 
 ---
@@ -124,7 +124,7 @@ python3 scripts/loadJSONL.py --db rag.db --jsonl outputs/objects.jsonl --reset
 sqlite3 rag.db "SELECT rowid,type,node_id,tp_id,substr(text,1,60) FROM docs LIMIT 5;"
 ```
 
-### ③ RAG 検索
+### ③ 検索
 ```bash
 python3 scripts/rag_retriever.py --db rag.db --q "mtu 1500" --filters type=tp node_id=L3SW1 --k 3
 ```

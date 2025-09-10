@@ -4,7 +4,7 @@
 
 ## Overview
 
-This repository provides a **JSON Schema based on IETF network models**, sample YAML data, validation scripts, and a lightweight CMDB environment for RAG (Retrieval-Augmented Generation).  
+This repository provides a **JSON Schema based on IETF network models**, sample YAML data, validation scripts, and a lightweight CMDB environment .  
 Operational attributes (`operational:*`) are integrated from CMDB, enabling the use of IETF YANG models as JSON Schema.  
 
 ---
@@ -86,7 +86,7 @@ Check:
 sqlite3 rag.db "SELECT rowid,type,node_id,tp_id,substr(text,1,60) FROM docs LIMIT 5;"
 ```
 
-### ③ RAG Retrieval
+### ③ Retrieval
 ```bash
 python3 scripts/rag_retriever.py --db rag.db --q "mtu 1500" --filters type=tp node_id=L3SW1 --k 3
 ```
