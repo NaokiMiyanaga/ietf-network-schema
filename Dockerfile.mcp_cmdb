@@ -1,0 +1,23 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+COPY . /app
+
+# Install runtime deps
+RUN pip install --no-cache-dir fastapi uvicorn
+
+# Optional: curl for container-internal healthcheck
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends curl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+ENV MCP_LOG_DIR=/app/logs \
+    REQUIRE_AUTH=0 \
+    IETF_DB=/app/rag.db
+
+RUN mkdir -p "$MCP_LOG_DIR"
+
+EXPOSE 9001
+
+CMD ["uvicorn","mcp_cmdb:app","--host","0.0.0.0","--port","9001","--access-log","--log-level","info"]
+
