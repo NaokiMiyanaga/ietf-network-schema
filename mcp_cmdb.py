@@ -20,6 +20,8 @@ _REQ_ID: Optional[str] = None
 REQUIRE_AUTH = os.getenv("REQUIRE_AUTH", "1") == "1"
 MCP_TOKEN = os.getenv("MCP_TOKEN", "")
 DEFAULT_DB = os.getenv("IETF_DB", str(BASE_DIR / "rag.db"))
+CMDB_USE_GPT = os.getenv("CMDB_USE_GPT", "0") == "1"
+CMDB_GPT_MODEL = os.getenv("CMDB_GPT_MODEL", os.getenv("OPENAI_MODEL", "gpt-4o-mini"))
 
 app = FastAPI(title="MCP CMDB (ietf-network-schema)")
 
@@ -91,6 +93,60 @@ def tools_list():
     ]
     return JSONResponse({"ok": True, "tools": tools, "ts_jst": _now_jst(), "server_version": "v1"})
 
+
+def _gpt_rewrite_query(orig_q: str) -> dict | None:
+    """Optional: rewrite natural language into better FTS terms/filters via OpenAI.
+    Returns a dict like {"q": "...", "k": int?} or None on failure/disabled.
+    """
+    if not CMDB_USE_GPT:
+        return None
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return None
+    try:
+        import urllib.request, json as _json
+        url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com") + "/v1/chat/completions"
+        sys_prompt = (
+            "You translate Japanese/NL network questions into a concise SQLite FTS5 text query. "
+            "Return a compact JSON object with keys: q (string), k (int optional). "
+            "Prefer ascii-ish tokens present in CMDB like mtu, duplex, up, down, L3SW1, r1, r2, r1-mgmt. "
+            "If a node:tp like L3SW1:ae1 is implied, include it verbatim in q. "
+            "If unsure, echo back the important tokens only."
+        )
+        user_prompt = f"Input: {orig_q}\nReturn JSON only: {{\"q\":<fts terms>,\"k\":<int?>}}"
+        body = {
+            "model": CMDB_GPT_MODEL,
+            "messages": [
+                {"role": "system", "content": sys_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": 0.0,
+            "response_format": {"type": "json_object"},
+        }
+        req = urllib.request.Request(
+            url,
+            data=_json.dumps(body).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=float(os.getenv("CMDB_GPT_TIMEOUT", "15"))) as resp:
+            raw = resp.read().decode("utf-8")
+        try:
+            rep = _json.loads(raw)
+            content = rep.get("choices", [{}])[0].get("message", {}).get("content", "{}")
+            out = _json.loads(content)
+            # sanity
+            if isinstance(out, dict) and out.get("q"):
+                return out
+        except Exception:
+            pass
+    except Exception:
+        return None
+    return None
+
 def _run_jp_query(db: str, q: str, k: int | None = None) -> Dict[str, Any]:
     py = Path("/usr/bin/python3")
     if not py.exists():
@@ -147,9 +203,20 @@ async def run(request: Request):
         k_val = int(k) if k is not None else None
     except Exception:
         k_val = None
+    # Optional GPT rewrite to improve FTS terms
+    plan = None
+    try:
+        plan = _gpt_rewrite_query(q)
+    except Exception:
+        plan = None
+    q_eff = str((plan or {}).get("q") or q).strip()
+    if isinstance(plan, dict) and isinstance(plan.get("k"), int) and not k_val:
+        k_val = int(plan.get("k"))
     # No.8 equivalent: SQL/FTS リクエスト（cmdb）
-    _mcp_log(8, "mcp sql request", {"tool": tool, "vars": {"db": db, "q": q, **({"k": k_val} if k_val else {})}})
-    rep = _run_jp_query(db, q.strip(), k_val)
+    if plan:
+        _mcp_log(7, "mcp gpt input", {"prompt": q, "rewrite": plan})
+    _mcp_log(8, "mcp sql request", {"tool": tool, "vars": {"db": db, "q": q_eff, **({"k": k_val} if k_val else {})}})
+    rep = _run_jp_query(db, q_eff, k_val)
     summary = None
     try:
         d = rep.get("data") or {}
