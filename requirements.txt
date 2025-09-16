@@ -1,2 +1,4 @@
-jsonschema>=4.18.0
-pyyaml
+fastapi==0.112.2
+uvicorn==0.30.6
+pydantic==2.9.2
+pydantic-core==2.23.4

@@ -1,46 +1,14 @@
+version: '3.8'
 services:
-  cmdb:
-    build:
-      context: .
-      dockerfile: Dockerfile.mcp_cmdb
-    container_name: cmdb
+  cmdb-mcp:
+    build: .
+    image: cmdb-mcp:latest
     ports:
-      - "9001:9001"
+      - "9101:9101"
     environment:
-      # Auth: set REQUIRE_AUTH=1 and MCP_TOKEN for protection
-      REQUIRE_AUTH: ${REQUIRE_AUTH:-0}
-      MCP_TOKEN: ${MCP_TOKEN:-secret123}
-      # Default DB path (mounted below). Override with absolute path if needed.
-      IETF_DB: ${IETF_DB:-/app/rag.db}
-      MCP_LOG_DIR: /app/logs
-      MCP_LOG_HEALTH: ${MCP_LOG_HEALTH:-0}
+      - CMDB_DB_PATH=/data/cmdb.sqlite3
+      - AIOPS_LOG_DIR=/data/logs
+      - REQUIRE_AUTH=${REQUIRE_AUTH:-1}
+      - MCP_TOKEN=${MCP_TOKEN:-secret123}
     volumes:
-      - ./mcp_cmdb.py:/app/mcp_cmdb.py:ro
-      - ./scripts:/app/scripts:ro
-      - ./rag.db:/app/rag.db:ro
-      - ./logs:/app/logs
-    command: [
-      "uvicorn","mcp_cmdb:app",
-      "--host","0.0.0.0",
-      "--port","9001",
-      "--access-log","--log-level","info"
-    ]
-    healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:9001/health"]
-      interval: 10s
-      timeout: 2s
-      retries: 5
-      start_period: 10s
-    restart: unless-stopped
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-    networks:
-      - mgmtnet
-
-networks:
-  mgmtnet:
-    external: true
-
+      - ./data:/data
