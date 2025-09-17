@@ -8,8 +8,9 @@ services:
       - "9101:9101"
     environment:
       - CMDB_DB_PATH=/data/cmdb.sqlite3
-      - AIOPS_LOG_DIR=/data/logs
+      - AIOPS_LOG_DIR=/app/logs
       - REQUIRE_AUTH=${REQUIRE_AUTH:-1}
       - MCP_TOKEN=${MCP_TOKEN:-secret123}
     volumes:
       - ./data:/data
+      - ./logs:/app/logs

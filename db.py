@@ -68,13 +68,52 @@ def get(conn: sqlite3.Connection, kind: str, id_: str) -> Optional[Dict[str, Any
         return None
     return {"kind": row["kind"], "id": row["id"], "data": row["data"]}
 
-def search(conn: sqlite3.Connection, q: str, limit: int = 20, offset: int = 0):
-    cur = conn.execute(
-        "SELECT kind,id FROM objects_fts WHERE objects_fts MATCH ? LIMIT ? OFFSET ?",
-        (q, limit, offset),
-    )
-    hits = [{"kind": r["kind"], "id": r["id"]} for r in cur.fetchall()]
-    return {"items": hits, "count": len(hits)}
+def search(q: str, limit: int = 50) -> dict:
+    """
+    FTS5 でヒットした rowid を objects に JOIN して正しい kind/id を返す。
+    - 入力 q の先頭に来がちなスラッシュ/記号を軽く除去
+    - 空になった場合は全件を LIMIT で返す（安全側）
+    - スペースや特殊文字を含むときは MATCH 用にクォート
+    """
+    import re
+
+    # 軽いサニタイズ（先頭記号を除去）
+    q = (q or "").strip()
+    q = re.sub(r'^[\s/#>]+', '', q)
+
+    conn = get_conn() if 'get_conn' in globals() else globals().get('conn')
+    if conn is None:
+        raise RuntimeError("DB connection is not initialized")
+
+    if not q:
+        # クエリ未指定は新しい順などにしたければここで ORDER を追加可
+        sql = """
+          SELECT o.kind, o.id
+          FROM objects o
+          WHERE 1=1
+          LIMIT ?
+        """
+        cur = conn.execute(sql, (limit,))
+    else:
+        # スペースや記号が含まれる場合は MATCH をクォートして安定化
+        needs_quote = bool(re.search(r"[\s:/()'\"]", q))
+        match_expr = f'"{q}"' if needs_quote else q
+
+        sql = """
+          SELECT o.kind, o.id
+          FROM objects_fts f
+          JOIN objects o ON o.rowid = f.rowid
+          WHERE f.data MATCH ?
+          LIMIT ?
+        """
+        cur = conn.execute(sql, (match_expr, limit))
+
+    rows = cur.fetchall()
+    # Row オブジェクト/タプル両対応
+    items = [{"kind": (r[0] if not isinstance(r, dict) else r["kind"]),
+              "id":   (r[1] if not isinstance(r, dict) else r["id"])}
+             for r in rows]
+    return {"items": items, "count": len(items)}
 
 def select_sql(conn: sqlite3.Connection, sql: str):
     if sql.strip().split()[0].lower() != "select":

@@ -37,10 +37,16 @@ def _mask(tok: str | None) -> str:
     return tok[:3] + "***" + tok[-3:]
 
 # --- logging (JSONL, JST timestamp, 10-event spec) -----------------------
-LOG_DIR = Path(os.getenv("AIOPS_LOG_DIR", "./data/logs")).expanduser()
+# Default log directory is /app/logs inside container (host ./logs)
+LOG_DIR = Path(os.getenv("AIOPS_LOG_DIR", "/app/logs")).expanduser()
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_PATH = LOG_DIR / f"mcp_events_{START_TS_STR}.jsonl"
 MCP_LOG_HEALTH = os.getenv("MCP_LOG_HEALTH", "0").lower() not in ["0", "false", "off"]
+
+try:
+    logger.info("log: dir=%s path=%s health_log=%s", str(LOG_DIR), str(LOG_PATH), str(MCP_LOG_HEALTH))
+except Exception:
+    pass
 
 def now_jst_iso() -> str:
   return datetime.datetime.utcnow().astimezone(JST).isoformat()
@@ -67,9 +73,14 @@ def log_json(no: int, actor: str, content: str | dict, tag: str, request_id: Opt
 
     with open(LOG_PATH, "a", encoding="utf-8") as f:
       f.write(json.dumps(rec, ensure_ascii=False) + "\n")
-  except Exception:
-    # Logging must never break serving
-    pass
+  except Exception as e:
+      # Logging must never break serving; optional fallback print for debug
+      if os.getenv("AIOPS_DEBUG_LOG"):
+          try:
+              print(f"[LOG_WRITE_FAIL] path={LOG_PATH} err={e}")
+          except Exception:
+              pass
+      pass
 
 # --- auth middleware ------------------------------------------------------
 @app.middleware("http")
@@ -142,7 +153,7 @@ def health():
         "base_dir": BASE_DIR,
     }
     if MCP_LOG_HEALTH:
-      log_json(-1, "mcp", payload, "health")
+      log_json(-1, "cmdb-mcp", payload, "cmdb-mcp health")
     return JSONResponse(payload)
 
 # --- tools ---------------------------------------------------------------
@@ -170,13 +181,18 @@ def tools_list():
             "input_schema": {"type": "object","properties": {"q": {"type": "string"},"limit": {"type": "integer"},"offset": {"type": "integer"}},"required": ["q"]},
         },
     ]
-    log_json(1, "mcp", "list tools", "mcp tools list")
+    log_json(1, "cmdb-mcp", "list tools", "cmdb-mcp tools list")
     return {"ok": True, "result": {"tools": tools, "count": len(tools)}}
 
 @app.post("/tools/call")
 def tools_call(call: ToolCall):
     # Open a fresh SQLite connection per request to avoid cross-thread reuse errors
     conn = get_conn()
+    if os.getenv("AIOPS_DEBUG_LOG"):
+        try:
+            logger.info("log: writing to %s", str(LOG_PATH))
+        except Exception:
+            pass
     try:
         name = call.name
         args = call.arguments or {}
@@ -190,12 +206,12 @@ def tools_call(call: ToolCall):
             req_id = str(rid)
         except Exception:
           pass
-        log_json(6, "mcp", {"name": name, "arguments": args}, "mcp request", request_id=req_id)
+        log_json(6, "cmdb-mcp", {"name": name, "arguments": args}, "cmdb-mcp request", request_id=req_id)
         try:
             if name == "cmdb.query":
                 sql = args.get("sql") or ""
                 result = select_sql(conn, sql)
-                log_json(11, "mcp", result, "mcp reply", request_id=req_id)
+                log_json(11, "cmdb-mcp", result, "cmdb-mcp reply", request_id=req_id)
                 return {"ok": True, "result": result}
             elif name == "cmdb.get":
                 kind = args.get("kind")
@@ -203,7 +219,7 @@ def tools_call(call: ToolCall):
                 if not kind or not id_:
                     raise HTTPException(status_code=400, detail="kind and id are required")
                 obj = db_get(conn, kind, id_)
-                log_json(11, "mcp", obj, "mcp reply", request_id=req_id)
+                log_json(11, "cmdb-mcp", obj, "cmdb-mcp reply", request_id=req_id)
                 return {"ok": True, "result": obj}
             elif name == "cmdb.upsert":
                 kind = args.get("kind")
@@ -212,19 +228,19 @@ def tools_call(call: ToolCall):
                 if not (kind and id_ and isinstance(data, dict)):
                     raise HTTPException(status_code=400, detail="kind, id, data(object) required")
                 res = db_upsert(conn, kind, id_, json.dumps(data, ensure_ascii=False))
-                log_json(11, "mcp", res, "mcp reply", request_id=req_id)
+                log_json(11, "cmdb-mcp", res, "cmdb-mcp reply", request_id=req_id)
                 return {"ok": True, "result": res}
             elif name == "cmdb.search":
                 q = args.get("q") or ""
                 limit = int(args.get("limit") or 20)
                 offset = int(args.get("offset") or 0)
                 res = db_search(conn, q, limit, offset)
-                log_json(11, "mcp", res, "mcp reply", request_id=req_id)
+                log_json(11, "cmdb-mcp", res, "cmdb-mcp reply", request_id=req_id)
                 return {"ok": True, "result": res}
             else:
                 raise HTTPException(status_code=404, detail=f"unknown tool: {name}")
         except Exception as e:
-            log_json(11, "mcp", {"error": str(e)}, "mcp reply", request_id=req_id)
+            log_json(11, "cmdb-mcp", {"error": str(e)}, "cmdb-mcp reply", request_id=req_id)
             return {"ok": False, "error": str(e)}
     finally:
         try:
