@@ -19,6 +19,7 @@ case "${CMD}" in
       *) exit 1;;
     esac
     docker compose down || true
+    docker compose rm
     docker compose build --no-cache
     docker compose up -d
     ;;

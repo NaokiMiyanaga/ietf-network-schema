@@ -8,6 +8,17 @@ from db import get_conn, init_db, upsert as db_upsert, get as db_get, search as 
 from typing import Optional
 import logging
 
+logger = logging.getLogger(__name__)
+
+def _debug_sql(sql: str, params=None, note: str = ""):
+    """Lightweight SQL logger (AIOPS_DEBUG_SQL=1). Emit via log_json for unified format."""
+    if os.getenv("AIOPS_DEBUG_SQL"):
+        try:
+            one = str(sql).strip().replace("\n", " ")
+            p = [] if params is None else (list(params) if not isinstance(params, dict) else params)
+            log_json(0, "cmdb-mcp", {"sql": one, "params": p, "note": note}, "cmdb-mcp sql")
+        except Exception:
+            pass
 
 app = FastAPI(title="CMDB MCP Server")
 
@@ -44,7 +55,7 @@ LOG_PATH = LOG_DIR / f"mcp_events_{START_TS_STR}.jsonl"
 MCP_LOG_HEALTH = os.getenv("MCP_LOG_HEALTH", "0").lower() not in ["0", "false", "off"]
 
 try:
-    logger.info("log: dir=%s path=%s health_log=%s", str(LOG_DIR), str(LOG_PATH), str(MCP_LOG_HEALTH))
+    log_json(0, "cmdb-mcp", {"dir": str(LOG_DIR), "path": str(LOG_PATH), "health_log": str(MCP_LOG_HEALTH)}, "cmdb-mcp log path")
 except Exception:
     pass
 
@@ -91,18 +102,14 @@ async def auth_mw(request: Request, call_next):
         auth = request.headers.get("authorization", "")
         if not auth.lower().startswith("bearer "):
             try:
-                logger.warning("auth: missing bearer path=%s", request.url.path)
+                log_json(0, "cmdb-mcp", {"path": str(request.url.path)}, "cmdb-mcp auth missing bearer")
             except Exception:
                 pass
             return JSONResponse({"ok": False, "error": "missing bearer"}, status_code=401)
         token = auth.split(" ", 1)[1].strip()
         if token != MCP_TOKEN:
             try:
-                logger.warning(
-                    "auth: invalid token path=%s got=%s expect=%s",
-#                    request.url.path, _mask(token), _mask(MCP_TOKEN)
-                    request.url.path, token, MCP_TOKEN
-                )
+                log_json(0, "cmdb-mcp", {"path": str(request.url.path), "got": _mask(token), "expect": _mask(MCP_TOKEN)}, "cmdb-mcp auth invalid")
             except Exception:
                 pass
             return JSONResponse({"ok": False, "error": "invalid token"}, status_code=403)
@@ -110,7 +117,7 @@ async def auth_mw(request: Request, call_next):
             # Optional debug on success
             if os.getenv("AIOPS_DEBUG_AUTH"):
                 try:
-                    logger.info("auth: ok path=%s got=%s", request.url.path, _mask(token))
+                    log_json(0, "cmdb-mcp", {"path": str(request.url.path)}, "cmdb-mcp auth ok")
                 except Exception:
                     pass
     return await call_next(request)
@@ -119,10 +126,7 @@ async def auth_mw(request: Request, call_next):
 @app.on_event("startup")
 def _init_db_on_startup():
     try:
-        logger.info(
-            "auth: REQUIRE_AUTH=%s MCP_TOKEN(masked)=%s len=%s",
-            str(REQUIRE_AUTH), _mask(MCP_TOKEN), len(MCP_TOKEN) if MCP_TOKEN else 0,
-        )
+        log_json(0, "cmdb-mcp", {"REQUIRE_AUTH": str(REQUIRE_AUTH), "MCP_TOKEN(masked)": _mask(MCP_TOKEN), "len": (len(MCP_TOKEN) if MCP_TOKEN else 0)}, "cmdb-mcp startup auth")
     except Exception:
         pass
     _c = get_conn()
@@ -190,7 +194,7 @@ def tools_call(call: ToolCall):
     conn = get_conn()
     if os.getenv("AIOPS_DEBUG_LOG"):
         try:
-            logger.info("log: writing to %s", str(LOG_PATH))
+            log_json(0, "cmdb-mcp", {"log_path": str(LOG_PATH)}, "cmdb-mcp log path confirm")
         except Exception:
             pass
     try:
@@ -210,7 +214,24 @@ def tools_call(call: ToolCall):
         try:
             if name == "cmdb.query":
                 sql = args.get("sql") or ""
-                result = select_sql(conn, sql)
+                params = args.get("params")
+                if isinstance(params, list):
+                    params = tuple(params)
+                _debug_sql(sql, params, note="cmdb.query")
+                # select_sql may or may not accept params depending on version
+                try:
+                    if params is None:
+                        log_json(8, "cmdb-mcp", {"name": name, "arguments": args, "sql": sql}, "cmdb-mcp request", request_id=req_id)
+                        result = select_sql(conn, sql)
+                    else:
+                        log_json(8, "cmdb-mcp", {"name": name, "arguments": args, "sql": sql, "params": list(params)}, "cmdb-mcp request", request_id=req_id)
+                        result = select_sql(conn, sql, params)  # type: ignore[arg-type]
+                except TypeError:
+                    # Back-compat: older select_sql without params support
+                    cur = conn.execute(sql, params or ())
+                    cols = [c[0] for c in cur.description] if cur.description else []
+                    rows = [dict(zip(cols, r)) for r in cur.fetchall()] if cols else cur.fetchall()
+                    result = {"rows": rows, "count": len(rows)}
                 log_json(11, "cmdb-mcp", result, "cmdb-mcp reply", request_id=req_id)
                 return {"ok": True, "result": result}
             elif name == "cmdb.get":
@@ -218,6 +239,7 @@ def tools_call(call: ToolCall):
                 id_ = args.get("id")
                 if not kind or not id_:
                     raise HTTPException(status_code=400, detail="kind and id are required")
+                log_json(8, "cmdb-mcp", {"name": name, "arguments": args, "kind": kind, "id": id_}, "cmdb-mcp request", request_id=req_id)
                 obj = db_get(conn, kind, id_)
                 log_json(11, "cmdb-mcp", obj, "cmdb-mcp reply", request_id=req_id)
                 return {"ok": True, "result": obj}
@@ -227,6 +249,7 @@ def tools_call(call: ToolCall):
                 data = args.get("data")
                 if not (kind and id_ and isinstance(data, dict)):
                     raise HTTPException(status_code=400, detail="kind, id, data(object) required")
+                log_json(8, "cmdb-mcp", {"name": name, "arguments": args, "kind": kind, "id": id_, "data": data}, "cmdb-mcp request", request_id=req_id)
                 res = db_upsert(conn, kind, id_, json.dumps(data, ensure_ascii=False))
                 log_json(11, "cmdb-mcp", res, "cmdb-mcp reply", request_id=req_id)
                 return {"ok": True, "result": res}
@@ -234,7 +257,9 @@ def tools_call(call: ToolCall):
                 q = args.get("q") or ""
                 limit = int(args.get("limit") or 20)
                 offset = int(args.get("offset") or 0)
-                res = db_search(conn, q, limit, offset)
+                log_json(8, "cmdb-mcp", {"name": name, "arguments": args, "q": q, "limit": limit, "offset": offset}, "cmdb-mcp request", request_id=req_id)
+                # db.search signature: search(q: str, limit: int = 50)
+                res = db_search(q, limit)
                 log_json(11, "cmdb-mcp", res, "cmdb-mcp reply", request_id=req_id)
                 return {"ok": True, "result": res}
             else:

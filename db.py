@@ -99,11 +99,12 @@ def search(q: str, limit: int = 50) -> dict:
         needs_quote = bool(re.search(r"[\s:/()'\"]", q))
         match_expr = f'"{q}"' if needs_quote else q
 
+        # FTS5 テーブルは (kind, id, text) を持つ。JOIN は rowid ではなく kind/id で行う。
         sql = """
           SELECT o.kind, o.id
           FROM objects_fts f
-          JOIN objects o ON o.rowid = f.rowid
-          WHERE f.data MATCH ?
+          JOIN objects o ON o.kind = f.kind AND o.id = f.id
+          WHERE f.text MATCH ?
           LIMIT ?
         """
         cur = conn.execute(sql, (match_expr, limit))
