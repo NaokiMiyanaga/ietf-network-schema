@@ -2,7 +2,8 @@ version: '3.8'
 services:
   cmdb-mcp:
     build: .
-    image: cmdb-mcp:latest
+    image: cmdb-mcp
+    container_name: cmdb-mcp
     ports:
       - "9101:9101"
     environment:
