@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 COMPOSE="docker compose -f "$ROOT_DIR"/docker-compose.yml"
-SERVICE="cmdb"
+SERVICE="cmdb-mcp"
 PORT="${PORT:-9001}"
 
 usage() {

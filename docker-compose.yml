@@ -5,12 +5,12 @@ services:
     image: cmdb-mcp
     container_name: cmdb-mcp
     ports:
-      - "9101:9101"
+      - "9001:9001"
     environment:
-      - CMDB_DB_PATH=/data/cmdb.sqlite3
-      - AIOPS_LOG_DIR=/app/logs
-      - REQUIRE_AUTH=${REQUIRE_AUTH:-1}
-      - MCP_TOKEN=${MCP_TOKEN:-secret123}
+      CMDB_DB_PATH: "/data/cmdb.sqlite3"
+      AIOPS_LOG_DIR: "/app/logs"
+      REQUIRE_AUTH: "1"           # デフォルトを固定
+      MCP_TOKEN: "secret123"      # デフォルトを固定。機密なら後述の方法で注入
     volumes:
       - ./data:/data
       - ./logs:/app/logs

@@ -19,7 +19,7 @@ case "${CMD}" in
       *) exit 1;;
     esac
     docker compose down || true
-    docker compose rm
+    docker compose rm -f -v || true
     docker compose build --no-cache
     docker compose up -d
     ;;
@@ -30,7 +30,7 @@ case "${CMD}" in
     docker compose ps
     ;;
   health)
-    BASE="http://localhost:9101"
+    BASE="http://localhost:9001"
     AUTH=""
     if [[ "${REQUIRE_AUTH:-1}" != "0" ]]; then
       AUTH="-H Authorization: Bearer ${MCP_TOKEN:-secret123}"

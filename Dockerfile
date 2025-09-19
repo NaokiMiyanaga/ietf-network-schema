@@ -7,5 +7,5 @@ ENV CMDB_DB_PATH=/data/cmdb.sqlite3
 ENV AIOPS_LOG_DIR=/data/logs
 ENV REQUIRE_AUTH=1
 ENV MCP_TOKEN=secret123
-EXPOSE 9101
-CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "9101"]
+EXPOSE 9001
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "9001"]
