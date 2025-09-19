@@ -14,3 +14,7 @@ services:
     volumes:
       - ./data:/data
       - ./logs:/app/logs
+      
+networks:
+  mgmtnet:
+    external: true
