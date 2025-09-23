@@ -179,11 +179,12 @@ def tools_list():
             "description": "Insert or update (kind, id) with JSON data.",
             "input_schema": {"type": "object","properties": {"kind": {"type": "string"},"id": {"type": "string"},"data": {"type": "object"}},"required": ["kind", "id", "data"]},
         },
-        {
-            "name": "cmdb.search",
-            "description": "Full-text search across CMDB objects (FTS5).",
-            "input_schema": {"type": "object","properties": {"q": {"type": "string"},"limit": {"type": "integer"},"offset": {"type": "integer"}},"required": ["q"]},
-        },
+            # generic cmdb.search disabled by policy
+            # {
+            #     "name": "cmdb.search",
+            #     "description": "Full-text search across CMDB objects (FTS5).",
+            #     "input_schema": {"type": "object","properties": {"q": {"type": "string"},"limit": {"type": "integer"},"offset": {"type": "integer"}},"required": ["q"]},
+            # },
     ]
     log_json(1, "cmdb-mcp", "list tools", "cmdb-mcp tools list")
     return {"ok": True, "result": {"tools": tools, "count": len(tools)}}

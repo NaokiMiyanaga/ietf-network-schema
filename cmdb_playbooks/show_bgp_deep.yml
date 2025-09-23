@@ -1,0 +1,69 @@
+cmdb_playbook: show_bgp_deep
+description: Deep BGP neighbor/route details
+tasks:
+- name: bgp_summary
+  dialect: sqlite
+  sql: "with base as (\n  select\n    id,\n    json_extract(data,'$.hostname')  as\
+    \ hostname,\n    json_extract(data,'$.asn')       as asn,\n    json_extract(data,'$.neighbors')\
+    \ as neighbors\n  from objects\n  where kind='node'\n    and ( :hostname is null\
+    \ or json_extract(data,'$.hostname') = :hostname )\n    and ( :asn is null or\
+    \ json_extract(data,'$.asn') = :asn )\n)\nselect id, hostname, asn, neighbors\n\
+    from base\norder by id\nlimit :limit offset :offset;"
+  params:
+  - &id001
+    name: hostname
+    type: string
+    required: false
+    default: null
+  - &id002
+    name: asn
+    type: integer
+    required: false
+    default: null
+  - &id003
+    name: limit
+    type: integer
+    required: false
+    default: 50
+    min: 1
+    max: 1000
+  - &id004
+    name: offset
+    type: integer
+    required: false
+    default: 0
+    min: 0
+  result:
+    format: rows
+    schema:
+    - name: id
+      type: string
+    - name: hostname
+      type: string
+    - name: asn
+      type: integer
+    - name: neighbors
+      type: json
+- name: bgp_neighbors
+  dialect: sqlite
+  sql: "select\n  id,\n  json_extract(data,'$.hostname') as hostname,\n  json_extract(n.value,'$.peer')\
+    \   as peer,\n  json_extract(n.value,'$.state')  as state\nfrom objects, json_each(json_extract(data,'$.neighbors'))\
+    \ as n\nwhere kind='node'\n  and ( :hostname is null or json_extract(data,'$.hostname')\
+    \ = :hostname )\n  and ( :asn is null or json_extract(data,'$.asn') = :asn )\n\
+    order by id, peer\nlimit :limit offset :offset;"
+  params:
+  - *id001
+  - *id002
+  - *id003
+  - *id004
+  result:
+    format: rows
+    schema:
+    - name: id
+      type: string
+    - name: hostname
+      type: string
+    - name: peer
+      type: string
+    - name: state
+      type: string

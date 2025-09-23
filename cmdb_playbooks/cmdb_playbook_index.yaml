@@ -1,0 +1,21 @@
+cmdb_playbooks:
+- intent: show_bgp
+  playbook: cmdb_playbooks/show_bgp.yml
+- intent: show_bgp_deep
+  playbook: cmdb_playbooks/show_bgp_deep.yml
+- intent: show_ospf
+  playbook: cmdb_playbooks/show_ospf.yml
+- intent: show_ospf_deep
+  playbook: cmdb_playbooks/show_ospf_deep.yml
+- intent: network_overview
+  playbook: cmdb_playbooks/network_overview.yml
+- intent: router_count
+  playbook: cmdb_playbooks/router_count.yml
+- intent: router_summary
+  playbook: cmdb_playbooks/router_summary.yml
+- intent: bridge_summary
+  playbook: cmdb_playbooks/bridge_summary.yml
+- intent: host_ip
+  playbook: cmdb_playbooks/host_ip.yml
+- intent: routers_list
+  playbook: cmdb_playbooks/routers_list.yml

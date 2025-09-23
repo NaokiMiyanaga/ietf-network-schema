@@ -1,0 +1,47 @@
+cmdb_playbook: routers_list
+description: List routers
+tasks:
+- name: list_routers
+  dialect: sqlite
+  sql: "select\n  id,\n  json_extract(data,'$.role')     as role,\n  json_extract(data,'$.hostname')\
+    \ as hostname\nfrom objects\nwhere kind='node'\n  and ( :role is null or json_extract(data,'$.role')\
+    \ = :role )\n  and ( :vendor is null or json_extract(data,'$.vendor') = :vendor\
+    \ )\n  and ( :q is null or json_extract(data,'$.hostname') like '%' || :q || '%'\
+    \ )\norder by id\nlimit :limit offset :offset;"
+  params:
+  - name: role
+    type: enum
+    enum:
+    - router
+    - leaf
+    - spine
+    required: false
+    default: null
+  - name: vendor
+    type: string
+    required: false
+    default: null
+  - name: q
+    type: string
+    required: false
+    default: null
+  - name: limit
+    type: integer
+    required: false
+    default: 50
+    min: 1
+    max: 1000
+  - name: offset
+    type: integer
+    required: false
+    default: 0
+    min: 0
+  result:
+    format: rows
+    schema:
+    - name: id
+      type: string
+    - name: role
+      type: string
+    - name: hostname
+      type: string

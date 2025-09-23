@@ -1,0 +1,31 @@
+cmdb_playbook: router_count
+description: Count routers in the environment
+tasks:
+- name: count_routers
+  dialect: sqlite
+  sql: "select count(*) as n\nfrom objects\nwhere kind='node'\n  and ( :role is null\
+    \ or json_extract(data,'$.role') = :role )\n  and ( :vendor is null or json_extract(data,'$.vendor')\
+    \ = :vendor )\n  and ( :q is null or json_extract(data,'$.hostname') like '%'\
+    \ || :q || '%' );"
+  params:
+  - name: role
+    type: enum
+    enum:
+    - router
+    - leaf
+    - spine
+    required: false
+    default: null
+  - name: vendor
+    type: string
+    required: false
+    default: null
+  - name: q
+    type: string
+    required: false
+    default: null
+  result:
+    format: scalar
+    schema:
+    - name: n
+      type: integer

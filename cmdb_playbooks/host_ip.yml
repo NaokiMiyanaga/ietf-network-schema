@@ -1,0 +1,33 @@
+cmdb_playbook: host_ip
+description: Host IP overview
+tasks:
+- name: host_ip
+  dialect: sqlite
+  sql: "select\n  id,\n  json_extract(data,'$.hostname') as hostname,\n  json_extract(data,'$.ip')\
+    \       as ip\nfrom objects\nwhere ( :hostname is null or json_extract(data,'$.hostname')\
+    \ = :hostname )\norder by id\nlimit :limit offset :offset;"
+  params:
+  - name: hostname
+    type: string
+    required: false
+    default: null
+  - name: limit
+    type: integer
+    required: false
+    default: 50
+    min: 1
+    max: 1000
+  - name: offset
+    type: integer
+    required: false
+    default: 0
+    min: 0
+  result:
+    format: rows
+    schema:
+    - name: id
+      type: string
+    - name: hostname
+      type: string
+    - name: ip
+      type: string

@@ -1,0 +1,34 @@
+cmdb_playbook: bridge_summary
+description: L2 bridge/VLAN summary
+tasks:
+- name: bridge_summary
+  dialect: sqlite
+  sql: "select\n  id,\n  json_extract(data,'$.hostname') as hostname,\n  json_extract(data,'$.vlans')\
+    \    as vlans\nfrom objects\nwhere ( kind='bridge' or json_extract(data,'$.role')='switch'\
+    \ )\n  and ( :hostname is null or json_extract(data,'$.hostname') = :hostname\
+    \ )\norder by id\nlimit :limit offset :offset;"
+  params:
+  - name: hostname
+    type: string
+    required: false
+    default: null
+  - name: limit
+    type: integer
+    required: false
+    default: 50
+    min: 1
+    max: 1000
+  - name: offset
+    type: integer
+    required: false
+    default: 0
+    min: 0
+  result:
+    format: rows
+    schema:
+    - name: id
+      type: string
+    - name: hostname
+      type: string
+    - name: vlans
+      type: json

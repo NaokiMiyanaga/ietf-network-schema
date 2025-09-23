@@ -1,0 +1,37 @@
+cmdb_playbook: router_summary
+description: Router summary (FRR + interfaces)
+tasks:
+- name: router_summary
+  dialect: sqlite
+  sql: "select\n  o.id,\n  json_extract(data,'$.hostname') as hostname,\n  json_extract(data,'$.role')\
+    \     as role\nfrom objects o\nwhere kind='node'\n  and ( :role is null or json_extract(data,'$.role')\
+    \ = :role )\norder by o.id\nlimit :limit offset :offset;"
+  params:
+  - name: role
+    type: enum
+    enum:
+    - router
+    - leaf
+    - spine
+    required: false
+    default: null
+  - name: limit
+    type: integer
+    required: false
+    default: 50
+    min: 1
+    max: 1000
+  - name: offset
+    type: integer
+    required: false
+    default: 0
+    min: 0
+  result:
+    format: rows
+    schema:
+    - name: id
+      type: string
+    - name: hostname
+      type: string
+    - name: role
+      type: string

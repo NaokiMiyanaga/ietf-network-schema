@@ -1,0 +1,41 @@
+cmdb_playbook: show_ospf_deep
+description: Deep OSPF details
+tasks:
+- name: ospf_summary
+  dialect: sqlite
+  sql: "select\n  id,\n  json_extract(data,'$.hostname')   as hostname,\n  json_extract(data,'$.router_id')\
+    \  as router_id,\n  json_extract(data,'$.area')       as area\nfrom objects\n\
+    where kind='node'\n  and ( :hostname is null or json_extract(data,'$.hostname')\
+    \ = :hostname )\n  and ( :area is null or json_extract(data,'$.area') = :area\
+    \ )\norder by id\nlimit :limit offset :offset;"
+  params:
+  - name: hostname
+    type: string
+    required: false
+    default: null
+  - name: area
+    type: string
+    required: false
+    default: null
+  - name: limit
+    type: integer
+    required: false
+    default: 50
+    min: 1
+    max: 1000
+  - name: offset
+    type: integer
+    required: false
+    default: 0
+    min: 0
+  result:
+    format: rows
+    schema:
+    - name: id
+      type: string
+    - name: hostname
+      type: string
+    - name: router_id
+      type: string
+    - name: area
+      type: string

@@ -1,0 +1,22 @@
+cmdb_playbook: network_overview
+description: High-level network overview
+tasks:
+- name: roles_count
+  dialect: sqlite
+  sql: 'select json_extract(data,''$.role'') as role, count(*) as n
+
+    from objects
+
+    where kind=''node''
+
+    group by role
+
+    order by role;'
+  params: []
+  result:
+    format: rows
+    schema:
+    - name: role
+      type: string
+    - name: n
+      type: integer
