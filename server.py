@@ -5,7 +5,8 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from db import get_conn, init_db, upsert as db_upsert, get as db_get, search as db_search, select_sql
-from typing import Optional
+from typing import Optional, Any
+import yaml
 import logging
 
 logger = logging.getLogger(__name__)
@@ -161,6 +162,68 @@ def health():
     return JSONResponse(payload)
 
 # --- tools ---------------------------------------------------------------
+# CMDB intent / playbook style index cache
+_CMDB_INDEX_CACHE: dict[str, Any] = {"path": None, "mtime": None, "items": []}
+_CMDB_INDEX_CANDIDATES = [
+    os.getenv("CMDB_INDEX_PATH"),  # explicit env override
+    "cmdb_index.yaml",             # dedicated cmdb index
+    "intents_unified.yaml",        # unified fallback
+]
+
+def _load_cmdb_index() -> tuple[list[dict], str]:
+    """Load CMDB SQL intent definitions.
+
+    Returns (items, source_path). Each item normalized with keys:
+      id, kind, description, params, side_effect, op_class, sql, path
+    """
+    for p in _CMDB_INDEX_CANDIDATES:
+        if not p:
+            continue
+        if not os.path.exists(p):
+            continue
+        try:
+            st = os.stat(p)
+            if _CMDB_INDEX_CACHE["path"] == p and _CMDB_INDEX_CACHE["mtime"] == st.st_mtime:
+                return _CMDB_INDEX_CACHE["items"], p
+            with open(p, "r", encoding="utf-8") as f:
+                data = yaml.safe_load(f) or []
+            items: list[dict] = []
+            if isinstance(data, list):
+                for it in data:
+                    if not isinstance(it, dict):
+                        continue
+                    sql = it.get("sql")
+                    if not sql:
+                        # skip non-sql items
+                        continue
+                    kind = it.get("kind") or it.get("type") or "cmdb"
+                    params = it.get("params") or it.get("parameters") or []
+                    if not isinstance(params, list):
+                        params = []
+                    items.append({
+                        "id": it.get("id") or it.get("name"),
+                        "kind": kind,
+                        "description": it.get("description") or it.get("desc") or "",
+                        "params": params,
+                        "side_effect": it.get("side_effect"),
+                        "op_class": it.get("op_class"),
+                        "sql": sql,
+                        "path": p,
+                    })
+            _CMDB_INDEX_CACHE.update({"path": p, "mtime": st.st_mtime, "items": items})
+            try:
+                log_json(0, "cmdb-mcp", {"path": p, "count": len(items)}, "cmdb-mcp cmdb_index load")
+            except Exception:
+                pass
+            return items, p
+        except Exception as e:
+            try:
+                log_json(0, "cmdb-mcp", {"path": p, "error": str(e)}, "cmdb-mcp cmdb_index load error")
+            except Exception:
+                pass
+            continue
+    return [], "(none)"
+
 @app.get("/tools/list")
 def tools_list():
     tools = [
@@ -178,6 +241,18 @@ def tools_list():
             "name": "cmdb.upsert",
             "description": "Insert or update (kind, id) with JSON data.",
             "input_schema": {"type": "object","properties": {"kind": {"type": "string"},"id": {"type": "string"},"data": {"type": "object"}},"required": ["kind", "id", "data"]},
+        },
+        {
+            "name": "cmdb.playbooks.list",
+            "description": "List CMDB intents (SQL templates)",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "q": {"type": "string"},
+                    "include_sql": {"type": "boolean"},
+                    "limit": {"type": "integer"}
+                }
+            },
         },
             # generic cmdb.search disabled by policy
             # {
@@ -263,6 +338,53 @@ def tools_call(call: ToolCall):
                 res = db_search(q, limit)
                 log_json(11, "cmdb-mcp", res, "cmdb-mcp reply", request_id=req_id)
                 return {"ok": True, "result": res}
+            elif name == "cmdb.playbooks.list":
+                q = (args.get("q") or "").strip().lower()
+                include_sql = bool(args.get("include_sql"))
+                limit = args.get("limit")
+                try:
+                    limit = int(limit) if limit is not None else 0
+                except Exception:
+                    limit = 0
+                if limit < 0:
+                    limit = 0
+                HARD_CAP = 500
+                items, source = _load_cmdb_index()
+                filtered: list[dict] = []
+                for it in items:
+                    if not q:
+                        filtered.append(it)
+                        continue
+                    blob = " ".join([
+                        str(it.get("id") or "").lower(),
+                        str(it.get("kind") or "").lower(),
+                        str(it.get("description") or "").lower(),
+                        str(it.get("sql") or "").lower(),
+                    ])
+                    if q in blob:
+                        filtered.append(it)
+                if limit:
+                    filtered = filtered[:limit]
+                if len(filtered) > HARD_CAP:
+                    filtered = filtered[:HARD_CAP]
+                out_items: list[dict] = []
+                for it in filtered:
+                    clone = {k: v for k, v in it.items() if k != "sql"}
+                    if include_sql:
+                        sql_txt = it.get("sql") or ""
+                        if isinstance(sql_txt, str) and len(sql_txt) > 20000:
+                            sql_txt = sql_txt[:20000] + "…(truncated)"
+                        clone["sql"] = sql_txt
+                    out_items.append(clone)
+                resp_obj = {
+                    "items": out_items,
+                    "count": len(out_items),
+                    "source": source,
+                    "filtered": bool(q),
+                    "include_sql": include_sql,
+                }
+                log_json(11, "cmdb-mcp", resp_obj, "cmdb-mcp reply", request_id=req_id)
+                return {"ok": True, "result": resp_obj}
             else:
                 raise HTTPException(status_code=404, detail=f"unknown tool: {name}")
         except Exception as e:

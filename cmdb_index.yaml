@@ -1,0 +1,14 @@
+- id: device_list
+  kind: cmdb
+  description: List devices (sample)
+  params: []
+  op_class: cmdb-read
+  side_effect: false
+  sql: SELECT id, hostname FROM devices ORDER BY id LIMIT 50;
+- id: sample_query
+  kind: cmdb
+  description: Sample
+  params: []
+  op_class: cmdb-read
+  side_effect: false
+  sql: SELECT 1 AS v;
