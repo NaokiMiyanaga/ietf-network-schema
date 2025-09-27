@@ -1,0 +1,1 @@
+docker exec cmdb-mcp python3 test_cmdb.py

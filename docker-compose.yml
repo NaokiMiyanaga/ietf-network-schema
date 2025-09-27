@@ -11,13 +11,11 @@ services:
       AIOPS_LOG_DIR: "/app/cmdb-mcp/logs"
       REQUIRE_AUTH: "1"           # デフォルトを固定
       MCP_TOKEN: "secret123"      # デフォルトを固定。機密なら後述の方法で注入
-      CMDB_DB: "/app/cmdb-mcp/rag.db"    # ← 参照パスを固定
-      CMDB_DB_PATH: "/data/cmdb.sqlite3"
+#      CMDB_DB: "/app/cmdb-mcp/rag.db"      # ← これを“唯一の参照”にする
+      CMDB_DB: "/app/cmdb-mcp/rag.db"        # ← 参照パスを /data 側に移動（ここだけを見るように）
     volumes:
-      - ./rag.db:/app/cmdb-mcp/rag.db
+      - ./rag.db:/app/cmdb-mcp/rag.db:ro   # ← “濃い”rag.db を明示#      - ./logs:/cmdb-mcpapp/logs
       - ./:/app/cmdb-mcp:rw
-      - ./data:/data
-#      - ./logs:/cmdb-mcpapp/logs
     networks:
       - mgmtnet
 
