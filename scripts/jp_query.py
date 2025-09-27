@@ -23,7 +23,11 @@ import argparse
 import json
 import re
 import sqlite3
+import os
 from typing import Dict, List, Tuple
+
+def _get_db_path(db_path):
+    return db_path or os.getenv("CMDB_DB_PATH", "rag.db")
 
 # Columns allowed for equality filters
 COLS = {"type", "network_id", "node_id", "tp_id", "link_id"}
@@ -152,6 +156,7 @@ def detect_list_intent(prompt: str) -> Dict[str, str] | None:
 
 # ----------------- Count SQL helpers -----------------
 def count_nodes(db_path: str, node_id: str | None = None, node_prefix: str | None = None) -> int:
+    db_path = _get_db_path(db_path)
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
     if node_id:
@@ -166,6 +171,7 @@ def count_nodes(db_path: str, node_id: str | None = None, node_prefix: str | Non
 
 
 def count_tps(db_path: str, node_id: str | None = None, node_prefix: str | None = None) -> Tuple[int, List[Tuple[str, int]]]:
+    db_path = _get_db_path(db_path)
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
     if node_id:
@@ -185,6 +191,7 @@ def count_tps(db_path: str, node_id: str | None = None, node_prefix: str | None 
 
 
 def count_routes(db_path: str, node_id: str | None = None, node_prefix: str | None = None) -> int:
+    db_path = _get_db_path(db_path)
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
     params = []
@@ -216,6 +223,7 @@ def detect_summary_intent(prompt: str) -> bool:
 
 
 def list_nodes(db_path: str, node_prefix: str | None = None, limit: int | None = None) -> List[str]:
+    db_path = _get_db_path(db_path)
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
     if node_prefix:
@@ -233,6 +241,7 @@ def list_nodes(db_path: str, node_prefix: str | None = None, limit: int | None =
 
 
 def list_tps(db_path: str, node_id: str | None = None, node_prefix: str | None = None, limit: int | None = None) -> List[Tuple[str, str]]:
+    db_path = _get_db_path(db_path)
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
     params = []
@@ -251,6 +260,7 @@ def list_tps(db_path: str, node_id: str | None = None, node_prefix: str | None =
 
 
 def list_addresses(db_path: str, node_id: str | None = None, node_prefix: str | None = None) -> List[Tuple[str, str, str | None, int | None]]:
+    db_path = _get_db_path(db_path)
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
     where = ["type='tp'",
@@ -275,6 +285,7 @@ def list_addresses(db_path: str, node_id: str | None = None, node_prefix: str | 
 
 
 def list_svis(db_path: str, node_id: str | None = None, node_prefix: str | None = None) -> List[Tuple[str, str, str | None, int | None]]:
+    db_path = _get_db_path(db_path)
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
     where = ["type='tp'", "tp_id LIKE 'vlan%'"]
@@ -298,6 +309,7 @@ def list_svis(db_path: str, node_id: str | None = None, node_prefix: str | None 
 
 
 def list_vlan_tps(db_path: str, vlan_id: int) -> List[Tuple[str, str]]:
+    db_path = _get_db_path(db_path)
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
     sql = (
@@ -357,6 +369,7 @@ def detect_vlan_intent(prompt: str) -> Dict[str, object] | None:
 
 
 def list_routes(db_path: str, node_id: str | None = None, node_prefix: str | None = None, limit: int | None = None) -> List[Tuple[str, str, str, str, str]]:
+    db_path = _get_db_path(db_path)
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
     params = []
@@ -495,7 +508,8 @@ def build_where(filters: Dict[str, str], alias: str = "d") -> Tuple[str, Dict[st
     return (" AND ".join(clauses), params)
 
 
-def retrieve(db_path: str, match_q: str, filters: Dict[str, str], k: int = 5) -> List[Dict]:
+def retrieve(db_path: str, match_q: str, filters: dict, k: int = 5) -> list:
+    db_path = _get_db_path(db_path)
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
@@ -554,7 +568,7 @@ def make_context(hits: List[Dict]) -> str:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--db", default="rag.db")
+    ap.add_argument("--db", default=os.getenv("CMDB_DB_PATH", "rag.db"))
     ap.add_argument("--q", required=True, help="Japanese natural language prompt")
     ap.add_argument("--k", type=int, default=5)
     ap.add_argument("--debug", action="store_true")

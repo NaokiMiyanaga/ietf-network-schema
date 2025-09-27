@@ -121,7 +121,8 @@ python3 scripts/loadJSONL.py --db rag.db --jsonl outputs/objects.jsonl --reset
 
 確認:
 ```bash
-sqlite3 rag.db "SELECT rowid,type,node_id,tp_id,substr(text,1,60) FROM docs LIMIT 5;"
+sqlite3 rag.db "SELECT name,type FROM sqlite_master WHERE name IN ('objects','docs','docs_fts');"
+sqlite3 rag.db "SELECT kind,id, json_array_length(json_extract(data,'$.interfaces')) AS ifs FROM objects ORDER BY id;"
 ```
 
 ### ③ 検索

@@ -99,6 +99,7 @@ def retrieve(db_path: str, query_text: str, filters: Optional[Dict[str, str]] = 
       - 名前付きパラメータで明確にバインド
       - クエリ文字列は build_match_query() で整形
     """
+    db_path = db_path or os.getenv("CMDB_DB_PATH", "rag.db")
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
@@ -193,10 +194,10 @@ def call_openai(prompt: str, model: str = "gpt-4o-mini") -> Optional[str]:
 # ----------------- CLI -----------------
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--db", required=True)
-    ap.add_argument("--q", required=True, help="ユーザー質問（MATCH 用には英数トークンへ整形されます）")
-    ap.add_argument("--filters", nargs="*", help="key=value among: type,network_id,node_id,tp_id,link_id")
+    ap.add_argument("--db", default=os.getenv("CMDB_DB_PATH", "rag.db"))
+    ap.add_argument("--q", required=True, help="Japanese natural language prompt")
     ap.add_argument("--k", type=int, default=5)
+    ap.add_argument("--filters", nargs="*", default=[], help="key=value pairs, keys in {type,network_id,node_id,tp_id,link_id}")
     ap.add_argument("--model", default="gpt-4o-mini")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--debug", action="store_true", help="print SQL and params")

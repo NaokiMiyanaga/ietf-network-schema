@@ -16,7 +16,12 @@ from __future__ import annotations
 import argparse
 import json
 import sqlite3
+import os
 from typing import Dict, List, Optional, Tuple
+
+
+def _get_db_path(db_path):
+    return db_path or os.getenv("CMDB_DB_PATH", "rag.db")
 
 
 def _row_to_edge(obj: Dict) -> Dict:
@@ -74,7 +79,8 @@ def _fallback_vlan_from_link_id(link_id: Optional[str]) -> Optional[int]:
     return None
 
 
-def load_edges(db_path: str) -> List[Dict]:
+def load_edges(db_path: str) -> list:
+    db_path = _get_db_path(db_path)
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
     rows = cur.execute("SELECT json FROM docs WHERE type='link'").fetchall()
@@ -237,7 +243,7 @@ def print_adjacency_full(db_path: str, node: str | None = None) -> None:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--db", default="rag.db")
+    ap.add_argument("--db", default=os.getenv("CMDB_DB_PATH", "rag.db"))
     ap.add_argument("--node", help="Show links that involve this node_id")
     ap.add_argument("--tp", help="Show links that involve this interface as NODE:TP")
     ap.add_argument("--format", choices=["list", "json"], default="list")

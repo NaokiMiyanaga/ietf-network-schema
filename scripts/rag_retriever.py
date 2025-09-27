@@ -6,7 +6,11 @@ Output:
   JSON with 'hits' (ordered by bm25) and a 'context' string you can drop into an LLM prompt.
 """
 import argparse, sqlite3, json, re
+import os
 from typing import List, Dict
+
+def _get_db_path(db):
+    return db or os.getenv("CMDB_DB_PATH", "rag.db")
 
 def parse_filters(items: List[str]) -> Dict[str, str]:
     out = {}
@@ -28,6 +32,7 @@ def build_sql(filters: Dict[str, str]) -> str:
     return where, params
 
 def query(db: str, q: str, k: int, filters: Dict[str, str]):
+    db = _get_db_path(db)
     conn = sqlite3.connect(db)
     cur = conn.cursor()
     where, params = build_sql(filters)
@@ -76,7 +81,7 @@ def make_context(hits: List[Dict]) -> str:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--db", default="rag.db")
+    ap.add_argument("--db", default=os.getenv("CMDB_DB_PATH", "rag.db"))
     ap.add_argument("--q", required=True, help="Query string for FTS5 MATCH")
     ap.add_argument("--k", type=int, default=5)
     ap.add_argument("--filters", nargs="*", default=[], help="key=value pairs, keys in {type,network_id,node_id,tp_id,link_id}")
