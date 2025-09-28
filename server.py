@@ -5,9 +5,38 @@ import sqlite3
 from typing import Any, Dict, List
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+from datetime import datetime, timezone, timedelta
+JST = timezone(timedelta(hours=9))
+import hashlib, time
+
+__DISPATCHER_TAG__ = hashlib.sha256(open(__file__,'rb').read()).hexdigest()[:12]
+print(f"[dispatcher] import tag={__DISPATCHER_TAG__} t={time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}")
 
 DB_PATH = os.getenv("CMDB_DB", "/app/cmdb-mcp/rag.db")
 app = FastAPI(title="cmdb-mcp")
+
+@app.get("/health")
+def health():
+    # Minimal health for ctrl.sh
+    info = {}
+    try:
+        st = os.stat(DB_PATH)
+        info["db_path"] = DB_PATH
+        info["db_size"] = st.st_size
+        info["db_mtime"] = datetime.fromtimestamp(st.st_mtime, JST).isoformat()
+    except Exception as e:
+        info["db_error"] = str(e)
+    return {
+        "ok": True,
+        "ts_jst": datetime.now(JST).isoformat(),
+        "id": None,
+        "server_version": "v1",
+        "mode": "cmdb",
+        "mode_reason": "sqlite/json1/fts5",
+        "require_auth": True,
+        "base_dir": os.getcwd(),
+        "info": info,
+    }
 
 class ToolCall(BaseModel):
     name: str
