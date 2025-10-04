@@ -76,8 +76,13 @@ def _startup():
 
 def only_select(sql: str) -> bool:
     s = sql.strip().lower()
-    # Allow leading PRAGMA for diag only; normal queries must start with select
-    return s.startswith("select ")
+    # 許可: SELECT もしくは CTE (WITH ...) から開始
+    if s.startswith("select "):
+        return True
+    if s.startswith("with "):
+        # CTE -> 後段に select が含まれるか簡易チェック
+        return " select " in s or s.rstrip().endswith(" select")
+    return False
 
 @app.post("/tools/call")
 def tools_call(payload: ToolCall):
@@ -85,7 +90,9 @@ def tools_call(payload: ToolCall):
     if payload.name == "cmdb.query":
         sql = payload.arguments.get("sql") or ""
         if not only_select(sql):
-            return {"ok": False, "error": "Only SELECT is allowed"}
+            if os.getenv("CMDB_DEBUG"):
+                print(f"[cmdb-mcp] reject non-select sql={sql[:120]!r}")
+            return {"ok": False, "error": "Only SELECT is allowed (or WITH CTE)"}
         try:
             cur = cx.cursor()
             cur.execute(sql)
