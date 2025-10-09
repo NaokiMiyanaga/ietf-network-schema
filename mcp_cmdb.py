@@ -1,6 +1,6 @@
-import os, json, subprocess, tempfile
+import os, json, subprocess, tempfile, sqlite3, re, time
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple, List
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from datetime import datetime
@@ -22,6 +22,9 @@ MCP_TOKEN = os.getenv("MCP_TOKEN", "")
 DEFAULT_DB = os.getenv("IETF_DB", str(BASE_DIR / "rag.db"))
 CMDB_USE_GPT = os.getenv("CMDB_USE_GPT", "0") == "1"
 CMDB_GPT_MODEL = os.getenv("CMDB_GPT_MODEL", os.getenv("OPENAI_MODEL", "gpt-4o-mini"))
+SERVER_VERSION = os.getenv("MCP_SERVER_VERSION", "v1")
+MAX_ROWS = max(1, int(os.getenv("CMDB_QUERY_MAX_ROWS", "1000")))
+_SQL_FORBIDDEN = re.compile(r"\b(UPDATE|DELETE|INSERT|DROP|ALTER|ATTACH|REINDEX|VACUUM|CREATE|REPLACE|PRAGMA|TRIGGER)\b", re.IGNORECASE)
 
 app = FastAPI(title="MCP CMDB (ietf-network-schema)")
 
@@ -70,9 +73,52 @@ def health():
         pass
     return info
 
+
+@app.get("/schema")
+async def schema(request: Request):
+    ok, resp = await _auth(request)
+    if not ok:
+        return resp
+    rid = None
+    try:
+        rid = request.headers.get("X-Request-Id")
+    except Exception:
+        rid = None
+    body = {
+        "ok": True,
+        "id": rid,
+        "ts_jst": _now_jst(),
+        "result": {
+            "protocol": "mcp/1.0",
+            "transport": "http",
+            "server_version": SERVER_VERSION,
+            "capabilities": {"tools": True},
+            "endpoints": [
+                {"path": "/tools/list", "method": "GET"},
+                {"path": "/tools/call", "method": "POST"},
+            ],
+        },
+    }
+    return JSONResponse(body, status_code=200)
+
 @app.get("/tools/list")
 def tools_list():
     tools = [
+        {
+            "id": "cmdb.query",
+            "title": "Execute read-only SQL against CMDB",
+            "description": "Run SELECT/CTE statements on the CMDB SQLite database (read-only).",
+            "tags": ["cmdb", "query", "sql"],
+            "inputs_schema": {
+                "type": "object",
+                "properties": {
+                    "sql": {"type": "string", "description": "SELECT ... statement"},
+                    "db": {"type": "string", "description": "Optional SQLite DB override"},
+                },
+                "required": ["sql"],
+            },
+            "version": SERVER_VERSION,
+        },
         {
             "id": "cmdb.jp_query",
             "title": "Japanese prompt → CMDB FTS query",
@@ -88,10 +134,10 @@ def tools_list():
                 "required": ["q"]
             },
             "examples": ["L3SW1:ae1 の状態は？", "リンクの遅延 2ms 以上"],
-            "version": "v1"
-        }
+            "version": SERVER_VERSION
+        },
     ]
-    return JSONResponse({"ok": True, "tools": tools, "ts_jst": _now_jst(), "server_version": "v1"})
+    return JSONResponse({"ok": True, "tools": tools, "ts_jst": _now_jst(), "server_version": SERVER_VERSION})
 
 
 def _gpt_rewrite_query(orig_q: str) -> dict | None:
@@ -165,6 +211,206 @@ def _run_jp_query(db: str, q: str, k: int | None = None) -> Dict[str, Any]:
         data = {"raw": out}
     return {"rc": p.returncode, "stdout": out, "stderr": err, "data": data}
 
+
+def _sanitize_sql(raw_sql: Any) -> Tuple[str, Optional[str]]:
+    if not isinstance(raw_sql, str):
+        return "", "sql must be a string"
+    sql = raw_sql.strip()
+    if not sql:
+        return "", "sql must not be empty"
+    sql = re.sub(r";\s*$", "", sql)
+    lowered = sql.lower()
+    if not (lowered.startswith("select") or lowered.startswith("with ")):
+        return "", "only SELECT or WITH statements are allowed"
+    if _SQL_FORBIDDEN.search(sql):
+        return "", "detected forbidden keyword in sql"
+    return sql, None
+
+
+def _execute_select(db_path: str, sql: str) -> Tuple[List[Dict[str, Any]], List[str], bool, float]:
+    started = time.time()
+    truncated = False
+    rows: List[Dict[str, Any]] = []
+    columns: List[str] = []
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.row_factory = sqlite3.Row
+        cur = conn.execute(sql)
+        description = cur.description or []
+        columns = [col[0] for col in description]
+        for idx, row in enumerate(cur):
+            if idx < MAX_ROWS:
+                row_dict = {col: row[col] for col in columns} if columns else dict(row)
+                rows.append(row_dict)
+            else:
+                truncated = True
+                break
+    finally:
+        conn.close()
+    duration_ms = (time.time() - started) * 1000
+    return rows, columns, truncated, duration_ms
+
+
+def _handle_cmdb_query(args: Dict[str, Any], rid: Optional[str]) -> Tuple[Dict[str, Any], int]:
+    sql_raw = args.get("sql") if isinstance(args, dict) else None
+    sql, err = _sanitize_sql(sql_raw)
+    if err:
+        body: Dict[str, Any] = {
+            "ok": False,
+            "id": rid,
+            "ts_jst": _now_jst(),
+            "error": {"code": "invalid_sql", "message": err},
+        }
+        if _REQ_ID:
+            body["request_id"] = _REQ_ID
+        _mcp_log(11, "mcp reply", {"status": 400, **body})
+        return body, 400
+    db_path = args.get("db") if isinstance(args, dict) else None
+    if not isinstance(db_path, str) or not db_path.strip():
+        db_path = DEFAULT_DB
+    db_path = db_path.strip()
+    _mcp_log(8, "mcp sql request", {"tool": "cmdb.query", "sql": sql, "db": db_path})
+    try:
+        rows, columns, truncated, duration_ms = _execute_select(db_path, sql)
+    except Exception as exc:
+        body = {
+            "ok": False,
+            "id": rid,
+            "ts_jst": _now_jst(),
+            "error": {"code": "query_failed", "message": str(exc)},
+        }
+        if _REQ_ID:
+            body["request_id"] = _REQ_ID
+        _mcp_log(11, "mcp reply", {"status": 500, **body})
+        return body, 500
+    summary = f"Returned {len(rows)} row(s)"
+    result: Dict[str, Any] = {
+        "sql": sql,
+        "rows": rows,
+        "columns": columns,
+        "count": len(rows),
+        "duration_ms": round(duration_ms, 2),
+        "db": db_path,
+    }
+    if truncated:
+        result["truncated"] = True
+        result["notice"] = f"results truncated to {MAX_ROWS} row(s)"
+    _mcp_log(9, "mcp sql reply", {"rows": len(rows), "duration_ms": round(duration_ms, 2), "truncated": truncated})
+    _mcp_log(10, "mcp cmdb output", {"summary": summary})
+    body = {
+        "ok": True,
+        "id": rid,
+        "ts_jst": _now_jst(),
+        "result": result,
+        "summary": summary,
+    }
+    if _REQ_ID:
+        body["request_id"] = _REQ_ID
+    _mcp_log(11, "mcp reply", {"status": 200, **{k: body[k] for k in body if k != "result"}, "count": len(rows)})
+    return body, 200
+
+
+def _handle_cmdb_jp_query(args: Dict[str, Any], rid: Optional[str]) -> Tuple[Dict[str, Any], int]:
+    tool = "cmdb.jp_query"
+    q = args.get("q") if isinstance(args, dict) else None
+    if not isinstance(q, str) or not q.strip():
+        body: Dict[str, Any] = {
+            "ok": False,
+            "id": rid,
+            "ts_jst": _now_jst(),
+            "error": {"code": "invalid_args", "message": "vars.q (prompt) is required"},
+        }
+        if _REQ_ID:
+            body["request_id"] = _REQ_ID
+        _mcp_log(11, "mcp reply", {"status": 400, **body})
+        return body, 400
+    db = args.get("db") if isinstance(args, dict) else None
+    if not isinstance(db, str) or not db.strip():
+        db = DEFAULT_DB
+    k = args.get("k") if isinstance(args, dict) else None
+    try:
+        k_val = int(k) if k is not None else None
+    except Exception:
+        k_val = None
+    plan = None
+    try:
+        plan = _gpt_rewrite_query(q)
+    except Exception:
+        plan = None
+    q_eff = str((plan or {}).get("q") or q).strip()
+    if isinstance(plan, dict) and isinstance(plan.get("k"), int) and not k_val:
+        k_val = int(plan.get("k"))
+    if plan:
+        _mcp_log(7, "mcp gpt input", {"prompt": q, "rewrite": plan})
+    req_vars = {"db": db, "q": q_eff}
+    if k_val:
+        req_vars["k"] = k_val
+    _mcp_log(8, "mcp sql request", {"tool": tool, "vars": req_vars})
+    rep = _run_jp_query(db, q_eff, k_val)
+    summary = None
+    try:
+        d = rep.get("data") or {}
+        hits = d.get("hits") if isinstance(d, dict) else None
+        n = len(hits) if isinstance(hits, list) else 0
+        summary = f"CMDB 検索: 上位 {n} 件を返しました。"
+    except Exception:
+        summary = "CMDB 検索を実行しました。"
+    body: Dict[str, Any] = {
+        "ok": rep.get("rc") == 0,
+        "id": rid,
+        "ts_jst": _now_jst(),
+        "summary": summary,
+        "debug": {
+            "no8_request": {"tool": tool, "vars": req_vars},
+            "no9_reply": rep,
+        },
+    }
+    if _REQ_ID:
+        body["request_id"] = _REQ_ID
+    _mcp_log(9, "mcp sql reply", rep)
+    _mcp_log(10, "mcp cmdb output", {"summary": summary})
+    slim = dict(body)
+    slim.pop("result", None)
+    slim.pop("debug", None)
+    _mcp_log(11, "mcp reply", {"status": 200 if rep.get("rc") == 0 else 500, **slim})
+    return body, (200 if rep.get("rc") == 0 else 500)
+
+
+@app.post("/tools/call")
+async def tools_call(request: Request):
+    ok, resp = await _auth(request)
+    if not ok:
+        return resp
+    body = await request.json()
+    global _REQ_ID
+    try:
+        _REQ_ID = body.get("id") or body.get("request_id")
+    except Exception:
+        _REQ_ID = None
+    _mcp_log(6, "mcp request", {"body": body})
+    name = body.get("name") or body.get("tool")
+    args = body.get("arguments") or body.get("vars") or {}
+    if not isinstance(args, dict):
+        args = {"value": args}
+    rid = body.get("id")
+    if name == "cmdb.query":
+        result_body, status = _handle_cmdb_query(args, rid)
+        return JSONResponse(result_body, status_code=status)
+    if name == "cmdb.jp_query":
+        result_body, status = _handle_cmdb_jp_query(args, rid)
+        return JSONResponse(result_body, status_code=status)
+    err = {
+        "ok": False,
+        "id": rid,
+        "ts_jst": _now_jst(),
+        "error": {"code": "unknown_tool", "message": f"unsupported tool: {name}"},
+    }
+    if _REQ_ID:
+        err["request_id"] = _REQ_ID
+    _mcp_log(11, "mcp reply", {"status": 400, **err})
+    return JSONResponse(err, status_code=400)
+
+
 @app.post("/run")
 async def run(request: Request):
     ok, resp = await _auth(request)
@@ -186,59 +432,14 @@ async def run(request: Request):
         err = {"ok": False, "error": {"code": "invalid_args", "message": "payload.tool is required"}}
         _mcp_log(11, "mcp reply", {"status": 400, **err})
         return JSONResponse(err, status_code=400)
-    if tool != "cmdb.jp_query":
-        err = {"ok": False, "error": {"code": "unknown_tool", "message": f"unsupported tool: {tool}"}}
-        _mcp_log(11, "mcp reply", {"status": 400, **err})
-        return JSONResponse(err, status_code=400)
-    q = (vars_obj or {}).get("q") if isinstance(vars_obj, dict) else None
-    if not isinstance(q, str) or not q.strip():
-        err = {"ok": False, "error": {"code": "invalid_args", "message": "vars.q (prompt) is required"}}
-        _mcp_log(11, "mcp reply", {"status": 400, **err})
-        return JSONResponse(err, status_code=400)
-    db = (vars_obj or {}).get("db") if isinstance(vars_obj, dict) else None
-    if not isinstance(db, str) or not db.strip():
-        db = DEFAULT_DB
-    k = (vars_obj or {}).get("k") if isinstance(vars_obj, dict) else None
-    try:
-        k_val = int(k) if k is not None else None
-    except Exception:
-        k_val = None
-    # Optional GPT rewrite to improve FTS terms
-    plan = None
-    try:
-        plan = _gpt_rewrite_query(q)
-    except Exception:
-        plan = None
-    q_eff = str((plan or {}).get("q") or q).strip()
-    if isinstance(plan, dict) and isinstance(plan.get("k"), int) and not k_val:
-        k_val = int(plan.get("k"))
-    # No.8 equivalent: SQL/FTS リクエスト（cmdb）
-    if plan:
-        _mcp_log(7, "mcp gpt input", {"prompt": q, "rewrite": plan})
-    _mcp_log(8, "mcp sql request", {"tool": tool, "vars": {"db": db, "q": q_eff, **({"k": k_val} if k_val else {})}})
-    rep = _run_jp_query(db, q_eff, k_val)
-    summary = None
-    try:
-        d = rep.get("data") or {}
-        hits = d.get("hits") if isinstance(d, dict) else None
-        n = len(hits) if isinstance(hits, list) else 0
-        summary = f"CMDB 検索: 上位 {n} 件を返しました。"
-    except Exception:
-        summary = "CMDB 検索を実行しました。"
-    out = {
-        "ok": rep.get("rc") == 0,
-        "summary": summary,
-        "ts_jst": _now_jst(),
-        "debug": {"no8_request": {"tool": tool, "vars": {"db": db, "q": q, **({"k": k_val} if k_val else {})}},
-                  "no9_reply": rep},
-    }
-    try:
-        _mcp_log(9, "mcp sql reply", rep)
-        _mcp_log(10, "mcp cmdb output", {"summary": summary})
-        slim = dict(out)
-        if isinstance(slim.get("debug"), dict):
-            slim.pop("debug")
-        _mcp_log(11, "mcp reply", {"status": 200, **slim})
-    except Exception:
-        pass
-    return out
+    args = vars_obj if isinstance(vars_obj, dict) else {}
+    rid = payload.get("id") if isinstance(payload, dict) else None
+    if tool == "cmdb.query":
+        result_body, status = _handle_cmdb_query(args, rid)
+        return JSONResponse(result_body, status_code=status)
+    if tool == "cmdb.jp_query":
+        result_body, status = _handle_cmdb_jp_query(args, rid)
+        return JSONResponse(result_body, status_code=status)
+    err = {"ok": False, "error": {"code": "unknown_tool", "message": f"unsupported tool: {tool}"}}
+    _mcp_log(11, "mcp reply", {"status": 400, **err})
+    return JSONResponse(err, status_code=400)

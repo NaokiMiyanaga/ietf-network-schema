@@ -1,0 +1,4 @@
+{"type": "network", "network-id": "lab"}
+{"type": "node", "network-id": "lab", "node-id": "r1"}
+{"type": "node", "network-id": "lab", "node-id": "r2"}
+{"type": "node", "network-id": "lab", "node-id": "l2a"}
